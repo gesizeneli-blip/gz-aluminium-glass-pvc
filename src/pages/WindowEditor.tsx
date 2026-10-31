@@ -233,26 +233,14 @@ export default function WindowEditor() {
           <div>
             <div className="card">
               <div className="grid g2">
-                <Field label="Pozicioni / emri"><input value={w.name} onChange={(e) => patch({ name: e.target.value })} /></Field>
-                <Field label="Sasia (copë)"><NumInput value={w.qty} min={1} step={1} onChange={(v) => patch({ qty: Math.max(1, Math.floor(v)) })} /></Field>
                 <Field label="Gjerësia (mm)"><NumInput value={w.width} min={0} onChange={(v) => patch({ width: v })} /></Field>
                 <Field label="Lartësia (mm)"><NumInput value={w.height} min={0} onChange={(v) => patch({ height: v })} /></Field>
-                <Field label="Sistemi i profileve">
+                <Field label="Prodhuesi / sistemi">
                   <select value={w.systemId} onChange={(e) => patch({ systemId: e.target.value, lineOff: {}, extraPieces: [] })}>
                     {cat.systems.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.material === 'pvc' ? 'PVC' : 'Alumin'})</option>)}
                   </select>
                 </Field>
-                <Field label="Lloji i qelqit">
-                  <select value={w.glassId} onChange={(e) => patch({ glassId: e.target.value })}>
-                    {cat.glassTypes.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-                  </select>
-                </Field>
-                <Field label="Ngjyra">
-                  <select value={w.color} onChange={(e) => patch({ color: e.target.value })}>
-                    {cat.colors.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
-                  </select>
-                </Field>
-                <Field label="Tipi / konfigurimi">
+                <Field label="Modeli i hapjes">
                   <select value="" onChange={(e) => e.target.value && applyPreset(e.target.value)}>
                     <option value="">{w.kind} (ndrysho…)</option>
                     <optgroup label="Standarde">
@@ -265,11 +253,29 @@ export default function WindowEditor() {
                     )}
                   </select>
                 </Field>
+                <Field label="Ngjyra">
+                  <select value={w.color} onChange={(e) => patch({ color: e.target.value })}>
+                    {cat.colors.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                  </select>
+                </Field>
+                <Field label="Sasia (copë)"><NumInput value={w.qty} min={1} step={1} onChange={(v) => patch({ qty: Math.max(1, Math.floor(v)) })} /></Field>
+              </div>
+            </div>
+            <details className="card">
+              <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Opsione të avancuara (emri, qelqi, shënime, ndarja e dritares)</summary>
+              <div className="grid g2" style={{ marginTop: 10 }}>
+                <Field label="Pozicioni / emri"><input value={w.name} onChange={(e) => patch({ name: e.target.value })} /></Field>
+                <Field label="Lloji i qelqit">
+                  <select value={w.glassId} onChange={(e) => patch({ glassId: e.target.value })}>
+                    {cat.glassTypes.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                  </select>
+                </Field>
               </div>
               <Field label="Shënime"><textarea value={w.notes} onChange={(e) => patch({ notes: e.target.value })} /></Field>
-            </div>
-            <div className="card">
-              <div className="row sp">
+            </details>
+            <details className="card">
+              <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Ndarja e dritares (për konfigurime të veçanta)</summary>
+              <div className="row sp" style={{ marginTop: 10 }}>
                 <h2 style={{ margin: 0 }}>Ndarja e dritares</h2>
                 <button
                   className="btn sm"
@@ -301,7 +307,7 @@ export default function WindowEditor() {
                   ))}
                 </div>
               )}
-            </div>
+            </details>
           </div>
           <div style={{ position: 'sticky', top: 8 }}>
             <div className="card">
