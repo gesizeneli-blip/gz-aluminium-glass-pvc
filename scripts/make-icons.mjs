@@ -1,0 +1,11 @@
+import sharp from 'sharp';
+import fs from 'node:fs';
+const svg = (pad) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="#0f1b2d"/><g transform="translate(${pad} ${pad}) scale(${(512-2*pad)/512})"><rect x="96" y="96" width="320" height="320" rx="10" fill="none" stroke="#c9a227" stroke-width="22"/><rect x="132" y="132" width="116" height="248" fill="#1d3557" stroke="#e8e8e8" stroke-width="10"/><rect x="264" y="132" width="116" height="248" fill="#1d3557" stroke="#e8e8e8" stroke-width="10"/><path d="M132 256 L248 132 M132 256 L248 380" stroke="#c9a227" stroke-width="8" fill="none"/><path d="M380 256 L264 132 M380 256 L264 380" stroke="#c9a227" stroke-width="8" fill="none"/></g></svg>`;
+fs.mkdirSync('public/icons', { recursive: true });
+const out = async (name, size, pad) => sharp(Buffer.from(svg(pad))).resize(size, size).png().toFile(`public/icons/${name}`);
+await out('icon-192.png', 192, 0);
+await out('icon-512.png', 512, 0);
+await out('icon-maskable-512.png', 512, 60);
+await out('apple-touch-icon.png', 180, 0);
+fs.writeFileSync('public/icons/icon.svg', svg(0));
+console.log('icons ok');
