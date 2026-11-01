@@ -29,10 +29,10 @@ export default function Dashboard() {
         <div className="title">{cat.business.name}</div>
         <div className="sub">Alumin, qelq dhe PVC. Përmasa të sakta, prerje pa humbje, oferta profesionale.</div>
         <svg className="art" viewBox="0 0 160 200" aria-hidden="true">
-          <rect x="6" y="6" width="148" height="188" fill="none" stroke="#c9a227" strokeWidth="4" />
+          <rect x="6" y="6" width="148" height="188" fill="none" stroke="#1fd1c2" strokeWidth="4" />
           <rect x="18" y="18" width="60" height="164" fill="#16304f" stroke="#e8e8e8" strokeWidth="2" />
           <rect x="82" y="18" width="60" height="164" fill="#16304f" stroke="#e8e8e8" strokeWidth="2" />
-          <path d="M18 100 L78 18 M18 100 L78 182 M142 100 L82 18 M142 100 L82 182" stroke="#c9a227" strokeWidth="1.6" fill="none" />
+          <path d="M18 100 L78 18 M18 100 L78 182 M142 100 L82 18 M142 100 L82 182" stroke="#1fd1c2" strokeWidth="1.6" fill="none" />
           <path d="M6 198 H154 M6 192 V204 M154 192 V204" stroke="#8fa3bf" strokeWidth="1" />
         </svg>
       </div>
