@@ -11,6 +11,9 @@
     "test": "tsx tests/run.ts"
   },
   "dependencies": {
+    "@fontsource/barlow-condensed": "^5.1.0",
+    "@fontsource/ibm-plex-mono": "^5.1.0",
+    "@fontsource/ibm-plex-sans": "^5.1.0",
     "dexie": "^4.0.8",
     "dexie-react-hooks": "^1.1.7",
     "jspdf": "^2.5.2",

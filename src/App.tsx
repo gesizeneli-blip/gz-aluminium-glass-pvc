@@ -37,7 +37,15 @@ function Shell() {
   return (
     <div className="app">
       <aside className={'sidebar' + (open ? ' open' : '')}>
-        <div className="brand"><b>GZ ALUMINIUM</b><span>GLASS &amp; PVC</span></div>
+        <div className="brand">
+          <svg width="40" height="40" viewBox="0 0 48 48" aria-hidden="true">
+            <rect x="3" y="3" width="42" height="42" rx="2" fill="none" stroke="#c9a227" strokeWidth="3" />
+            <rect x="9" y="9" width="14" height="30" fill="#1d3557" stroke="#e8e8e8" strokeWidth="1.5" />
+            <rect x="25" y="9" width="14" height="30" fill="#1d3557" stroke="#e8e8e8" strokeWidth="1.5" />
+            <path d="M9 24 L23 9 M9 24 L23 39 M39 24 L25 9 M39 24 L25 39" stroke="#c9a227" strokeWidth="1.2" fill="none" />
+          </svg>
+          <div><b>GZ ALUMINIUM</b><span>GLASS &amp; PVC</span></div>
+        </div>
         <nav className="nav">
           {NAV.map(([to, ic, label]) => (
             <NavLink key={to} to={to} end={to === '/'}>
