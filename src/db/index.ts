@@ -5,6 +5,8 @@ import type {
 import { ACCESSORIES, buildSystemsAndProfiles, COLORS, DEFAULT_SETTINGS, GLASS_TYPES, LABOR_RATES, SEED_CATEGORIES, SEED_VERSION } from './seed';
 import type { QuotationRec } from '../lib/quotation';
 
+export interface OutboxRow { seq?: number; tbl: string; key: string | number; del?: boolean }
+
 export interface SettingRow {
   key: string;
   value: any;
@@ -21,6 +23,7 @@ class GZDB extends Dexie {
   quotations!: Table<QuotationRec, number>;
   templates!: Table<Template, number>;
   settings!: Table<SettingRow, string>;
+  outbox!: Table<OutboxRow, number>;
 
   constructor() {
     super('gz-aluminium-db');
@@ -35,6 +38,20 @@ class GZDB extends Dexie {
       quotations: '++id,projectId,number,status,createdAt',
       templates: '++id',
       settings: 'key'
+    });
+    // v2: local change queue used by cloud sync
+    this.version(2).stores({
+      clients: '++id,name',
+      projects: '++id,clientId,status,date,createdAt',
+      windows: '++id,projectId,systemId',
+      systems: 'id',
+      profiles: 'id,systemId',
+      glassTypes: 'id',
+      accessories: 'id',
+      quotations: '++id,projectId,number,status,createdAt',
+      templates: '++id',
+      settings: 'key',
+      outbox: '++seq'
     });
   }
 }

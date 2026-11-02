@@ -1,12 +1,85 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { exportAll, importAll, resetEverything, setSetting, TABLES, validateBackup, db } from '../db';
 import { useCatalog } from '../lib/data';
 import { Field, NumInput, Tabs, confirmDo } from '../components/ui';
 import { download, todayISO, uid } from '../lib/format';
+import { connect, disconnect, getSyncState, onSyncState, replaceCloudWithLocal, syncLinked, syncNow, type SyncState } from '../sync/engine';
+import * as syncApi from '../sync/client';
+
+function CloudPanel() {
+  const [st, setSt] = useState<SyncState>(getSyncState());
+  const [email, setEmail] = useState('');
+  const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [info, setInfo] = useState('');
+  const [choice, setChoice] = useState(false);
+  useEffect(() => onSyncState(setSt), []);
+  const linked = syncLinked();
+
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true); setErr(''); setInfo('');
+    try { await fn(); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  };
+  const login = (mode: 'auto' | 'cloud' | 'local') => run(async () => {
+    const r = await connect(email.trim(), pw, mode);
+    if (r === 'need-choice') setChoice(true); else { setChoice(false); setPw(''); setInfo('Pajisja u lidh me cloud.'); }
+  });
+  const signup = () => run(async () => {
+    const s = await syncApi.signUp(email.trim(), pw);
+    if (!s) { setInfo('Llogaria u krijua. Hap lidhjen e konfirmimit që të erdhi në email, pastaj shtyp “Hyr”.'); return; }
+    const r = await connect(email.trim(), pw, 'auto');
+    if (r === 'need-choice') setChoice(true); else { setPw(''); setInfo('Llogaria u krijua dhe pajisja u lidh.'); }
+  });
+
+  if (linked) {
+    return (
+      <div className="card">
+        <h2>Cloud</h2>
+        <div className={'alert ' + (st.status === 'error' ? 'err' : 'info')}>
+          {st.status === 'error' ? `Gabim: ${st.message}` : st.status === 'syncing' ? 'Duke sinkronizuar…' : `Lidhur si ${st.email || syncApi.loadSession()?.email}. ${st.last ? 'Sinkronizimi i fundit: ' + new Date(st.last).toLocaleString('sq-AL') : ''}`}
+        </div>
+        <p className="muted">Çdo ndryshim ruhet edhe në cloud dhe del në pajisjet e tjera pas pak sekondash. Pa internet punon normalisht dhe sinkronizon kur lidhet.</p>
+        <div className="row">
+          <button className="btn primary" disabled={st.status === 'syncing'} onClick={() => syncNow()}>Sinkronizo tani</button>
+          <button className="btn danger" onClick={async () => { if (confirmDo('Dil nga cloud? Të dhënat mbeten në këtë pajisje dhe në cloud.')) await disconnect(); setSt(getSyncState()); }}>Dil</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="card">
+      <h2>Cloud (sinkronizim mes pajisjeve)</h2>
+      <p className="muted">Hyr me një llogari për të parë të njëjtat të dhëna në telefon dhe në kompjuter. Të dhënat e secilit mbrohen me llogarinë e tij.</p>
+      {err && <div className="alert err">{err}</div>}
+      {info && <div className="alert info">{info}</div>}
+      {choice ? (
+        <div>
+          <div className="alert warn">Në cloud ka tashmë të dhëna dhe edhe në këtë pajisje ka projekte. Zgjidh çfarë mbetet. Rekomandohet të bësh më parë një kopje rezervë (skeda “Kopje rezervë”).</div>
+          <div className="row">
+            <button className="btn primary" disabled={busy} onClick={() => confirmDo('Të dhënat e kësaj pajisjeje do të ZËVENDËSOHEN me ato të cloud. Vazhdo?') && login('cloud')}>Përdor të dhënat e cloud (zëvendëson këtë pajisje)</button>
+            <button className="btn danger" disabled={busy} onClick={() => confirmDo('Të dhënat e cloud do të përzihen me këto të pajisjes (rreshtat me të njëjtin id mbishkruhen). Vazhdo?') && login('local')}>Ngarko këtë pajisje në cloud</button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div className="grid g2">
+            <Field label="Email"><input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
+            <Field label="Fjalëkalimi (min. 6 shkronja)"><input type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} /></Field>
+          </div>
+          <div className="row">
+            <button className="btn primary" disabled={busy || !email || pw.length < 6} onClick={() => login('auto')}>Hyr</button>
+            <button className="btn" disabled={busy || !email || pw.length < 6} onClick={signup}>Krijo llogari të re</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Settings() {
   const cat = useCatalog();
-  const [tab, setTab] = useState<'biz' | 'quote' | 'rates' | 'lists' | 'look' | 'backup'>('biz');
+  const [tab, setTab] = useState<'biz' | 'quote' | 'rates' | 'lists' | 'look' | 'cloud' | 'backup'>('biz');
   const [msg, setMsg] = useState<{ t: 'ok' | 'err'; s: string } | null>(null);
   const file = useRef<HTMLInputElement>(null);
   const b = cat.business;
@@ -27,6 +100,7 @@ export default function Settings() {
       const summary = `${d.projects.length} projekte, ${d.windows.length} dritare, ${d.quotations.length} oferta, ${d.profiles.length} profile`;
       if (!confirmDo(`KUJDES: kjo do të ZËVENDËSOJË të gjitha të dhënat aktuale me kopjen rezervë (${summary}, eksportuar ${String(obj.exportedAt).slice(0, 10)}). Vazhdo?`)) return;
       await importAll(obj);
+      if (syncLinked()) await replaceCloudWithLocal();
       setMsg({ t: 'ok', s: `U rikthye me sukses: ${summary}.` });
     } catch (e) {
       setMsg({ t: 'err', s: `Importi dështoi: ${(e as Error).message}` });
@@ -41,7 +115,7 @@ export default function Settings() {
       <Tabs
         tabs={[
           { key: 'biz', label: 'Biznesi' }, { key: 'quote', label: 'Oferta dhe PDF' }, { key: 'rates', label: 'Punë krahu' },
-          { key: 'lists', label: 'Ngjyra dhe kategori' }, { key: 'look', label: 'Pamja' }, { key: 'backup', label: 'Kopje rezervë' }
+          { key: 'lists', label: 'Ngjyra dhe kategori' }, { key: 'look', label: 'Pamja' }, { key: 'cloud', label: 'Cloud' }, { key: 'backup', label: 'Kopje rezervë' }
         ]}
         value={tab}
         onChange={setTab}
@@ -149,6 +223,8 @@ export default function Settings() {
         </div>
       )}
 
+      {tab === 'cloud' && <CloudPanel />}
+
       {tab === 'backup' && (
         <div className="card">
           {msg && <div className={'alert ' + (msg.t === 'ok' ? 'info' : 'err')}>{msg.s}</div>}
@@ -165,6 +241,7 @@ export default function Settings() {
               if (!confirmDo('Do të fshihen TË GJITHA të dhënat dhe do të rikthehen vlerat fillestare. Ke bërë kopje rezervë?')) return;
               if (!confirmDo('Konfirmo edhe një herë: fshij gjithçka?')) return;
               await resetEverything();
+              if (syncLinked()) await replaceCloudWithLocal();
               setMsg({ t: 'ok', s: 'Të dhënat u rivendosën.' });
             }}
           >

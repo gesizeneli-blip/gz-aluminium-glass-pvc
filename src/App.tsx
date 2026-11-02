@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { HashRouter, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { ensureSeed } from './db';
+import { installSyncHooks, startSync } from './sync/engine';
 import { useCatalog } from './lib/data';
 import Dashboard from './pages/Dashboard';
 import { ProjectDetail, ProjectsPage } from './pages/Projects';
@@ -122,8 +123,9 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [err, setErr] = useState('');
   useEffect(() => {
+    installSyncHooks();
     ensureSeed()
-      .then(() => setReady(true))
+      .then(() => { setReady(true); startSync(); })
       .catch((e) => setErr(String(e)));
     // ask the browser not to evict IndexedDB (important on iOS/Safari)
     navigator.storage?.persist?.().catch(() => undefined);
