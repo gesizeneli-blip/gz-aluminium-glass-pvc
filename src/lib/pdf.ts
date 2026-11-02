@@ -35,7 +35,8 @@ function drawShapes(doc: jsPDF, d: Drawing, x: number, y: number, w: number, h: 
       doc.setTextColor(...hexToRgb(s.fill ?? '#1b2433'));
       doc.setFont('helvetica', s.bold ? 'bold' : 'normal');
       doc.setFontSize(Math.max(4, s.size * scale * 2.8346));
-      doc.text(s.s, X(s.x), Y(s.y), { align: s.anchor ?? 'left', angle: s.rot ? -s.rot : 0 });
+      const align = s.anchor === 'middle' ? 'center' : s.anchor === 'end' ? 'right' : 'left';
+      doc.text(s.s, X(s.x), Y(s.y), { align, angle: s.rot ? -s.rot : 0 });
     }
   }
   doc.setLineDashPattern([], 0);
