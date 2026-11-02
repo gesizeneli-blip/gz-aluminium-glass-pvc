@@ -81,6 +81,7 @@ export function QuotationEditor() {
   const [saved, setSaved] = useState(true);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfPrices, setPdfPrices] = useState(true);
+  const [pdfErr, setPdfErr] = useState('');
   const loaded = useRef(false);
   const first = useRef(true);
 
@@ -116,13 +117,44 @@ export function QuotationEditor() {
   const makePdf = (prices: boolean) => buildQuotationPdf(q, { ...cat.pdf, symbol: sym }, prices);
   const fname = (prices: boolean) => `Oferta-${q.number}${prices ? '' : '-teknike'}.pdf`;
 
-  const preview = (prices: boolean) => {
+  const guard = (fn: () => void | Promise<void>) => {
+    setPdfErr('');
+    try {
+      const r = fn();
+      if (r && typeof (r as Promise<void>).catch === 'function') (r as Promise<void>).catch((e) => setPdfErr(`Gabim me PDF: ${(e as Error).message}`));
+    } catch (e) {
+      console.error(e);
+      setPdfErr(`Gabim gjatë krijimit të PDF: ${(e as Error).message}`);
+    }
+  };
+  const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const preview = (prices: boolean) => guard(() => {
     if (pdfUrl) URL.revokeObjectURL(pdfUrl);
     setPdfPrices(prices);
     setPdfUrl(URL.createObjectURL(makePdf(prices).output('blob')));
-  };
-  const print = (prices: boolean) => {
+  });
+  /** Download: share sheet (Save to Files) where possible, new tab on iPhone, normal download elsewhere. */
+  const download = (prices: boolean) => guard(async () => {
+    const doc = makePdf(prices);
+    const blob = doc.output('blob');
+    const file = new File([blob], fname(prices), { type: 'application/pdf' });
+    const nv = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+    if (isIOS() || !('download' in document.createElement('a'))) {
+      if (nv.canShare?.({ files: [file] })) {
+        try { await nv.share({ files: [file], title: `Oferta ${q.number}` }); return; } catch (e) { if ((e as Error).name === 'AbortError') return; }
+      }
+      const url = URL.createObjectURL(blob);
+      if (!window.open(url, '_blank')) window.location.href = url;
+      return;
+    }
+    doc.save(fname(prices));
+  });
+  const print = (prices: boolean) => guard(() => {
     const url = URL.createObjectURL(makePdf(prices).output('blob'));
+    if (isIOS()) {
+      if (!window.open(url, '_blank')) window.location.href = url;
+      return;
+    }
     const f = document.createElement('iframe');
     f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
     f.src = url;
@@ -131,18 +163,17 @@ export function QuotationEditor() {
       setTimeout(() => { f.remove(); URL.revokeObjectURL(url); }, 60000);
     };
     document.body.appendChild(f);
-  };
-  const share = async (prices: boolean) => {
+  });
+  const share = (prices: boolean) => guard(async () => {
     const blob = makePdf(prices).output('blob');
     const file = new File([blob], fname(prices), { type: 'application/pdf' });
     const nv = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
     if (nv.canShare?.({ files: [file] })) {
-      try { await nv.share({ files: [file], title: `Oferta ${q.number}` }); } catch { /* cancelled */ }
+      try { await nv.share({ files: [file], title: `Oferta ${q.number}` }); } catch (e) { if ((e as Error).name !== 'AbortError') throw e; }
     } else {
-      makePdf(prices).save(fname(prices));
-      alert('Ndarja nuk mbështetet në këtë pajisje; skedari u shkarkua.');
+      download(prices);
     }
-  };
+  });
 
   const issue = async () => {
     if (q.items.some((i) => i.calc.errors.length)) {
@@ -201,9 +232,10 @@ export function QuotationEditor() {
 
       <div className="card">
         <h2>PDF</h2>
+        {pdfErr && <div className="alert err">{pdfErr}</div>}
         <div className="row">
           <button className="btn primary" onClick={() => preview(q.showPrices)}>Shiko PDF</button>
-          <button className="btn" onClick={() => makePdf(q.showPrices).save(fname(q.showPrices))}>Shkarko</button>
+          <button className="btn" onClick={() => download(q.showPrices)}>Shkarko</button>
           <button className="btn" onClick={() => print(q.showPrices)}>Printo</button>
           <button className="btn" onClick={() => share(q.showPrices)}>Ndaj (iPhone)</button>
           <button className="btn" onClick={() => preview(false)}>PDF teknik pa çmime</button>
@@ -269,10 +301,11 @@ export function QuotationEditor() {
         <Modal title={`PDF ${q.number}${pdfPrices ? '' : ' (teknik)'}`} onClose={() => { URL.revokeObjectURL(pdfUrl); setPdfUrl(null); }} wide>
           <div className="row" style={{ marginBottom: 8 }}>
             <a className="btn sm" href={pdfUrl} target="_blank" rel="noreferrer">Hap në skedë të re</a>
-            <button className="btn sm" onClick={() => makePdf(pdfPrices).save(fname(pdfPrices))}>Shkarko</button>
+            <button className="btn sm" onClick={() => download(pdfPrices)}>Shkarko</button>
             <button className="btn sm" onClick={() => print(pdfPrices)}>Printo</button>
             <button className="btn sm" onClick={() => share(pdfPrices)}>Ndaj</button>
           </div>
+          <div className="hint" style={{ marginBottom: 6 }}>Nëse PDF-ja nuk shfaqet më poshtë (iPhone), shtyp “Hap në skedë të re” dhe pastaj Share, Save to Files.</div>
           <iframe title="pdf" src={pdfUrl} style={{ width: '100%', height: '70vh', border: '1px solid var(--line)', borderRadius: 8 }} />
         </Modal>
       )}
