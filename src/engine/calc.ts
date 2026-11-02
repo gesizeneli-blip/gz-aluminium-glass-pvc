@@ -15,7 +15,8 @@ import type {
   WindowItem
 } from '../types';
 import { evaluate } from './formula';
-import { computeGeometry, isSash, matchClass, GCell } from './geometry';
+import { computeGeometry, isSash, matchClass, GCell, Geometry } from './geometry';
+import { isShaped, segments, shapePerimeter, normalizeShape } from './shapes';
 
 export interface CalcCtx {
   systems: Map<string, System>;
@@ -88,8 +89,20 @@ export function calcWindow(w: WindowItem, ctx: CalcCtx): Calc {
   const H = w.height;
   if (!(W > 0) || !(H > 0)) return emptyCalc(w, ['Gjerësia dhe lartësia duhet të jenë më të mëdha se 0.']);
   const qty = Math.max(1, Math.floor(w.qty || 1));
-  const geom = computeGeometry(W, H, w.layout, sys.params);
-  warnings.push(...geom.warnings);
+  const shaped = isShaped(w.shape);
+  let geom: Geometry;
+  if (shaped) {
+    const fw0 = sys.params.frameW ?? 0;
+    geom = {
+      cells: [{ key: '1-1', col: 1, row: 1, x: fw0, y: fw0, cw: W - 2 * fw0, ch: H - 2 * fw0, open: 'fixed' }],
+      mullV: [], mullH: [], innerW: W - 2 * fw0, innerH: H - 2 * fw0, warnings: []
+    };
+    warnings.push(...normalizeShape(W, H, w.shape!).warnings);
+    warnings.push('Formë jo-drejtkëndëshe: qelqi dhe çmimi llogariten sipas drejtkëndëshit rreth formës; profili i kasës ndahet sipas segmenteve (kënde të ndryshme prerjeje, kontrolloji); nuk ka kanate ose ndarje.');
+  } else {
+    geom = computeGeometry(W, H, w.layout, sys.params);
+    warnings.push(...geom.warnings);
+  }
   const area = (W * H) / 1e6;
   const perimeter = (2 * (W + H)) / 1000;
 
@@ -102,11 +115,35 @@ export function calcWindow(w: WindowItem, ctx: CalcCtx): Calc {
     return { ...g.vars, nRows: w.layout.columns[cell.col - 1]?.cells.length ?? 1 };
   };
 
+  const shapedSeen = new Set<string>();
   for (const line of sys.recipe) {
     if (!line.enabled || w.lineOff[line.id]) continue;
     const prof = ctx.profiles.get(line.profileId);
     if (!prof) {
       errors.push(`Rreshti "${line.label}": profili nuk është caktuar.`);
+      continue;
+    }
+    if (shaped && (line.scope === 'window' || line.scope === 'cell' || line.scope === 'fixed')) {
+      try {
+        const per = shapePerimeter(W, H, w.shape!);
+        if (line.kind === 'meter') {
+          if (line.scope !== 'window') continue;
+          const m = evaluate(line.lengthFormula, { ...base, W: per / 4, H: per / 4 });
+          meters.push({ lineId: line.id, profileId: line.profileId, label: line.label, meters: m / 1000 });
+        } else {
+          // one piece per frame segment, using the first recipe line of each profile
+          const key = `${line.profileId}|${line.scope === 'window' ? 'w' : 'c'}`;
+          if (shapedSeen.has(key)) continue;
+          shapedSeen.add(key);
+          for (const seg of segments(W, H, w.shape!)) {
+            const v = { ...base, W: seg.len, H: seg.len, CW: seg.len, CH: seg.len, SW: seg.len, SH: seg.len, GW: seg.len, GH: seg.len, MH: seg.len, nRows: 1 };
+            const len = evaluate(line.lengthFormula, v);
+            if (len > 0) pieces.push({ lineId: line.id, profileId: line.profileId, label: `${line.label.split(' – ')[0]} – ${seg.label}`, length: r1(len), qty: 1 });
+          }
+        }
+      } catch (e) {
+        errors.push(`Rreshti "${line.label}": ${(e as Error).message}`);
+      }
       continue;
     }
     const contexts: { vars: Record<string, number>; cell?: string }[] = [];

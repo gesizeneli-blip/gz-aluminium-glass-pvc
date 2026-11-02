@@ -1,8 +1,10 @@
-import type { Layout, OpenType } from '../types';
+import type { Layout, OpenType, ShapeDef } from '../types';
 import { computeGeometry, isSash } from './geometry';
+import { insetPolygon, isShaped, normalizeShape, outline, segments } from './shapes';
 
 export type Shape =
   | { k: 'rect'; x: number; y: number; w: number; h: number; fill?: string; stroke?: string; sw?: number }
+  | { k: 'poly'; pts: [number, number][]; fill?: string; stroke?: string; sw?: number }
   | { k: 'line'; x1: number; y1: number; x2: number; y2: number; stroke?: string; sw?: number; dash?: number[] }
   | { k: 'text'; x: number; y: number; s: string; size: number; anchor?: 'start' | 'middle' | 'end'; rot?: number; fill?: string; bold?: boolean };
 
@@ -16,11 +18,70 @@ export interface DrawOpts {
   glassLabels?: Record<string, string>; // cell key -> "350x1230"
   colorHex?: string;
   showKeys?: boolean;
+  shape?: ShapeDef;
 }
 
 const INK = '#1b2433';
 
+function buildShapedDrawing(W: number, H: number, shape: ShapeDef, params: Record<string, number>, opts: DrawOpts): Drawing {
+  const fw = params.frameW ?? 60;
+  const big = Math.max(W, H);
+  const u = big / 600;
+  const fs = big / 42;
+  const shapes: Shape[] = [];
+  const out = outline(W, H, shape);
+  const inn = insetPolygon(out, fw);
+  const P = (pts: { x: number; y: number }[]): [number, number][] => pts.map((p) => [p.x, p.y]);
+  shapes.push({ k: 'poly', pts: P(out), fill: opts.colorHex || '#e9ecef', stroke: INK, sw: u * 1.6 });
+  shapes.push({ k: 'poly', pts: P(inn), fill: '#cfe6f5', stroke: INK, sw: u });
+  const lab = opts.glassLabels?.['1-1'];
+  const cx = inn.reduce((a, p) => a + p.x, 0) / inn.length;
+  const cy = inn.reduce((a, p) => a + p.y, 0) / inn.length;
+  if (lab) shapes.push({ k: 'text', x: cx, y: cy + fs * 0.3, s: lab, size: fs * 0.62, anchor: 'middle', fill: '#27425f' });
+  const dl = (x1: number, y1: number, x2: number, y2: number) => shapes.push({ k: 'line', x1, y1, x2, y2, stroke: '#6b7280', sw: u * 0.7 });
+  if (opts.dims !== false) {
+    const yb = H + fs * 2.2;
+    dl(0, yb, W, yb);
+    dl(0, H + fs * 0.4, 0, yb + fs * 0.6);
+    dl(W, H + fs * 0.4, W, yb + fs * 0.6);
+    shapes.push({ k: 'text', x: W / 2, y: yb + fs * 1.15, s: `${Math.round(W)}`, size: fs, anchor: 'middle', bold: true });
+    const xl = -fs * 2.2;
+    dl(xl, 0, xl, H);
+    dl(-fs * 0.4, 0, xl - fs * 0.6, 0);
+    dl(-fs * 0.4, H, xl - fs * 0.6, H);
+    shapes.push({ k: 'text', x: xl - fs * 0.5, y: H / 2, s: `${Math.round(H)}`, size: fs, anchor: 'middle', rot: -90, bold: true });
+    // extra dimensions for the shape
+    const segs = segments(W, H, shape);
+    const xr = W + fs * 1.6;
+    if (shape.type === 'arch') {
+      const rise = normalizeShape(W, H, shape).def.rise ?? 0;
+      const side = H - rise;
+      dl(xr, H - side, xr, H);
+      shapes.push({ k: 'text', x: xr + fs * 0.9, y: H - side / 2, s: `${Math.round(side)}`, size: fs * 0.8, anchor: 'middle', rot: -90 });
+      shapes.push({ k: 'text', x: W / 2, y: -fs * 0.8, s: `hark ${Math.round(segs[2].len)}`, size: fs * 0.75, anchor: 'middle', fill: '#6b7280' });
+    } else if (shape.type === 'trapezoid') {
+      const nd = normalizeShape(W, H, shape).def;
+      const lo = Math.round(nd.lowH ?? H / 2);
+      const onLeft = nd.lowSide === 'left';
+      const xx = onLeft ? xl - fs * 3.2 : xr;
+      dl(xx, H - lo, xx, H);
+      shapes.push({ k: 'text', x: onLeft ? xx - fs * 0.5 : xx + fs * 0.9, y: H - lo / 2, s: `${lo}`, size: fs * 0.8, anchor: 'middle', rot: -90 });
+    } else if (shape.type === 'triangle') {
+      const a = (W * (normalizeShape(W, H, shape).def.apex ?? 50)) / 100;
+      const yt = -fs * 1.6;
+      dl(0, yt, a, yt);
+      shapes.push({ k: 'text', x: a / 2, y: yt - fs * 0.35, s: `${Math.round(a)}`, size: fs * 0.8, anchor: 'middle' });
+    }
+  }
+  const padL = opts.dims === false ? fs : fs * 6.5;
+  const padT = opts.dims === false ? fs : fs * 3.2;
+  const padR = opts.dims === false ? fs : fs * 4;
+  const padB = opts.dims === false ? fs : fs * 4.6;
+  return { shapes, vb: { x: -padL, y: -padT, w: W + padL + padR, h: H + padT + padB } };
+}
+
 export function buildDrawing(W: number, H: number, layout: Layout, params: Record<string, number>, opts: DrawOpts = {}): Drawing {
+  if (isShaped(opts.shape)) return buildShapedDrawing(W, H, opts.shape, params, opts);
   const g = computeGeometry(W, H, layout, params);
   const fw = params.frameW ?? 60;
   const sw = params.sashW ?? 70;
@@ -145,6 +206,8 @@ export function drawingToSvg(d: Drawing): string {
   const parts = d.shapes.map((s) => {
     if (s.k === 'rect')
       return `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${s.fill ?? 'none'}" stroke="${s.stroke ?? 'none'}" stroke-width="${s.sw ?? 1}"/>`;
+    if (s.k === 'poly')
+      return `<polygon points="${s.pts.map((p) => p.join(',')).join(' ')}" fill="${s.fill ?? 'none'}" stroke="${s.stroke ?? 'none'}" stroke-width="${s.sw ?? 1}" stroke-linejoin="round"/>`;
     if (s.k === 'line')
       return `<line x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}" stroke="${s.stroke ?? INK}" stroke-width="${s.sw ?? 1}"${s.dash ? ` stroke-dasharray="${s.dash.join(' ')}"` : ''}/>`;
     const rot = s.rot ? ` transform="rotate(${s.rot} ${s.x} ${s.y})"` : '';

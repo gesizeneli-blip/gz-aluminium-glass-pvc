@@ -5,6 +5,8 @@ import { calcWindow, CalcCtx, DEFAULT_CATEGORIES, sumCalcs } from '../src/engine
 import { computeGeometry, PRESETS } from '../src/engine/geometry';
 import { buildSystemsAndProfiles, ACCESSORIES, GLASS_TYPES, LABOR_RATES } from '../src/db/seed';
 import type { WindowItem } from '../src/types';
+import { insetPolygon, outline, segments, shapePerimeter } from '../src/engine/shapes';
+import { buildDrawing, drawingToSvg } from '../src/engine/drawing';
 
 let n = 0;
 const t = (name: string, fn: () => void) => { fn(); n++; console.log('ok -', name); };
@@ -134,6 +136,50 @@ t('all presets compute on all systems', () => {
   for (const s of systems) for (const p of PRESETS) {
     const c = calcWindow(win({ systemId: s.id, layout: p.layout, width: 1800, height: 2100 }), ctx());
     assert.deepEqual(c.errors, [], `${s.id}/${p.key}`);
+  }
+});
+
+t('shapes: arch semicircle, trapezoid, triangle, oval segments', () => {
+  const arch = segments(1000, 1500, { type: 'arch', rise: 500 });
+  assert.ok(Math.abs(arch[2].len - Math.PI * 500) < 0.5, 'semicircle arc = pi*r');
+  assert.equal(arch[1].len, 1000);
+  assert.ok(arch[2].curved);
+  const trap = segments(1000, 1500, { type: 'trapezoid', lowH: 900, lowSide: 'right' });
+  assert.ok(Math.abs(trap[2].len - Math.hypot(1000, 600)) < 1e-6);
+  const tri = segments(1200, 1000, { type: 'triangle', apex: 50 });
+  assert.ok(Math.abs(tri[1].len - Math.hypot(600, 1000)) < 1e-6);
+  const ov = shapePerimeter(1000, 1000, { type: 'oval' });
+  assert.ok(Math.abs(ov - Math.PI * 1000) < 1, 'circle perimeter');
+});
+
+t('shapes: inset polygon is smaller, finite, inside', () => {
+  for (const sh of [{ type: 'arch' as const, rise: 400 }, { type: 'trapezoid' as const, lowH: 700, lowSide: 'left' as const }, { type: 'triangle' as const, apex: 30 }, { type: 'oval' as const }]) {
+    const o = outline(1200, 1600, sh);
+    const i = insetPolygon(o, 60);
+    assert.equal(i.length, o.length);
+    for (const p of i) { assert.ok(Number.isFinite(p.x) && Number.isFinite(p.y)); assert.ok(p.x >= 0 && p.x <= 1200 && p.y >= 0 && p.y <= 1600, sh.type); }
+    const svg = drawingToSvg(buildDrawing(1200, 1600, [] as any, systems[0].params, { shape: sh, glassLabels: { '1-1': '1x1' } } as any));
+    assert.ok(svg.includes('<polygon'));
+  }
+});
+
+t('shaped window: frame by segments, bounding-rect glass and price', () => {
+  const cx = ctx();
+  const w = win({ shape: { type: 'arch', rise: 500 }, width: 1000, height: 1500, layout: PRESETS[0].layout });
+  const c = calcWindow(w, cx);
+  assert.deepEqual(c.errors, []);
+  const frame = c.pieces.filter((p) => p.profileId === 'trocal70-frame');
+  assert.equal(frame.reduce((a, p) => a + p.qty, 0), 4);
+  assert.ok(frame.some((p) => Math.abs(p.length - Math.PI * 500) < 1));
+  assert.equal(c.glass.length, 1);
+  assert.equal(c.glass[0].w, 1000 - 2 * 60);
+  assert.ok(Math.abs(c.price - 10000 * 1.5) < 1e-6, 'm2 price from bounding rectangle');
+  assert.ok(c.warnings.some((x) => x.includes('jo-drejtkëndëshe')));
+  assert.ok(c.meters.length > 0, 'gasket by perimeter');
+  for (const type of ['trapezoid', 'triangle', 'oval'] as const) {
+    const cc = calcWindow(win({ shape: { type }, width: 1200, height: 1400 }), cx);
+    assert.deepEqual(cc.errors, [], type);
+    assert.ok(cc.pieces.length >= 3, type);
   }
 });
 

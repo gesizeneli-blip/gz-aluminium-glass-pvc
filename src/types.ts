@@ -25,6 +25,25 @@ export const OPEN_LABELS: Record<OpenType, string> = {
   'door-right': 'Derë (menteshë djathtas)'
 };
 
+export type ShapeType = 'rect' | 'arch' | 'trapezoid' | 'triangle' | 'oval';
+export const SHAPE_LABELS: Record<ShapeType, string> = {
+  rect: 'Drejtkëndësh (standard)',
+  arch: 'Hark (sipër i harkuar)',
+  trapezoid: 'Trapez / pjerrët',
+  triangle: 'Trekëndësh',
+  oval: 'Rrethore / ovale'
+};
+export interface ShapeDef {
+  type: ShapeType;
+  /** arch: rise of the arch in mm */
+  rise?: number;
+  /** trapezoid: height of the lower side in mm */
+  lowH?: number;
+  lowSide?: 'left' | 'right';
+  /** triangle: apex position, % of width from the left */
+  apex?: number;
+}
+
 export interface Cell {
   open: OpenType;
   /** aperture height share in mm; undefined = auto */
@@ -212,6 +231,7 @@ export interface WindowItem {
   cellGlass: Record<string, string>;
   color: string;
   layout: Layout;
+  shape?: ShapeDef;
   pricing: Pricing;
   laborIds: string[];
   extras: ExtraCost[];

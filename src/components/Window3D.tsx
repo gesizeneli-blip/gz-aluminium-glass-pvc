@@ -2,11 +2,12 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { computeGeometry, isSash } from '../engine/geometry';
-import type { Layout } from '../types';
+import type { Layout, ShapeDef } from '../types';
+import { insetPolygon, isShaped, outline } from '../engine/shapes';
 
 /** Real 3D model generated from actual dimensions, frame/sash depth and glass thickness. */
 export function Window3D({
-  W, H, layout, params, colorHex, glassThickness
+  W, H, layout, params, colorHex, glassThickness, shape
 }: {
   W: number;
   H: number;
@@ -14,6 +15,7 @@ export function Window3D({
   params: Record<string, number>;
   colorHex: string;
   glassThickness: number;
+  shape?: ShapeDef;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -67,6 +69,22 @@ export function Window3D({
       }
     };
 
+    if (isShaped(shape)) {
+      const toShape = (pts: { x: number; y: number }[]) =>
+        new THREE.Shape(pts.map((p) => new THREE.Vector2((p.x - W / 2) * s, (H / 2 - p.y) * s)));
+      const out = outline(W, H, shape);
+      const inn = insetPolygon(out, fw);
+      const frameShape = toShape(out);
+      frameShape.holes.push(new THREE.Path(inn.map((p) => new THREE.Vector2((p.x - W / 2) * s, (H / 2 - p.y) * s))));
+      const fgeo = new THREE.ExtrudeGeometry(frameShape, { depth: fd * s, bevelEnabled: false, curveSegments: 1 });
+      fgeo.translate(0, 0, (-fd / 2) * s);
+      const fm = new THREE.Mesh(fgeo, frameMat);
+      group.add(fm);
+      group.add(new THREE.LineSegments(new THREE.EdgesGeometry(fgeo, 30), edge));
+      const ggeo = new THREE.ExtrudeGeometry(toShape(inn), { depth: gt * s, bevelEnabled: false, curveSegments: 1 });
+      ggeo.translate(0, 0, (-gt / 2) * s);
+      group.add(new THREE.Mesh(ggeo, glassMat));
+    } else {
     // outer frame
     add(0, 0, W, fw, fd, 0, frameMat);
     add(0, H - fw, W, fw, fd, 0, frameMat);
@@ -93,6 +111,7 @@ export function Window3D({
       } else {
         add(c.x - 6, c.y - 6, c.cw + 12, c.ch + 12, gt, 0, glassMat);
       }
+    }
     }
     scene.add(group);
 
@@ -130,7 +149,7 @@ export function Window3D({
       renderer.dispose();
       if (renderer.domElement.parentNode === el) el.removeChild(renderer.domElement);
     };
-  }, [W, H, layout, params, colorHex, glassThickness]);
+  }, [W, H, layout, params, colorHex, glassThickness, shape]);
 
   return <div ref={ref} className="three" />;
 }

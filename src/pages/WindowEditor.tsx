@@ -4,13 +4,13 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { useCatalog } from '../lib/data';
 import { calcWindow } from '../engine/calc';
-import { computeGeometry, PRESETS } from '../engine/geometry';
-import { glassSize } from '../engine/calc';
+import { PRESETS } from '../engine/geometry';
 import { Drawing2D } from '../components/Drawing2D';
 import { Window3D } from '../components/Window3D';
 import { CalcBreakdown, CostTable } from '../components/CalcBreakdown';
 import { Field, NumInput, Tabs, Warnings, confirmDo } from '../components/ui';
-import { OPEN_LABELS, OpenType, PRICE_METHOD_LABELS, PriceMethod, WindowItem, Layout } from '../types';
+import { OPEN_LABELS, OpenType, PRICE_METHOD_LABELS, PriceMethod, WindowItem, Layout, SHAPE_LABELS, ShapeType } from '../types';
+import { isShaped, normalizeShape } from '../engine/shapes';
 import type { Catalog } from '../lib/data';
 
 export function defaultWindow(projectId: number, cat: Catalog, order: number): WindowItem {
@@ -170,15 +170,9 @@ export default function WindowEditor() {
   const calc = useMemo(() => (w && cat.ready ? calcWindow(w, cat.ctx) : null), [w, cat.ctx, cat.ready]);
   const glassLabels = useMemo(() => {
     const out: Record<string, string> = {};
-    if (!w || !sys) return out;
-    for (const c of computeGeometry(w.width, w.height, w.layout, sys.params).cells) {
-      try {
-        const g = glassSize(sys, c, w.width, w.height);
-        out[c.key] = `${g.gw}×${g.gh}`;
-      } catch { /* shown in errors */ }
-    }
+    (calc?.glass ?? []).forEach((g) => (out[g.cell] = `${g.w}×${g.h}`));
     return out;
-  }, [w, sys]);
+  }, [calc]);
 
   if (!cat.ready || !w || !calc) return <div className="empty">Duke ngarkuar…</div>;
   const colorHex = cat.colors.find((c) => c.name === w.color)?.hex ?? '#f4f4f2';
@@ -188,9 +182,9 @@ export default function WindowEditor() {
 
   const applyPreset = (key: string) => {
     const p = PRESETS.find((x) => x.key === key);
-    if (p) patch({ layout: JSON.parse(JSON.stringify(p.layout)), kind: p.name, cellGlass: {}, lineOff: {} });
+    if (p) patch({ layout: JSON.parse(JSON.stringify(p.layout)), kind: p.name, cellGlass: {}, lineOff: {}, shape: undefined });
     const t = templates.find((x) => `t${x.id}` === key);
-    if (t) patch({ layout: JSON.parse(JSON.stringify(t.layout)), kind: t.name, cellGlass: {}, lineOff: {} });
+    if (t) patch({ layout: JSON.parse(JSON.stringify(t.layout)), kind: t.name, cellGlass: {}, lineOff: {}, shape: undefined });
   };
 
   const sameProject = (
@@ -259,7 +253,50 @@ export default function WindowEditor() {
                   </select>
                 </Field>
                 <Field label="Sasia (copë)"><NumInput value={w.qty} min={1} step={1} onChange={(v) => patch({ qty: Math.max(1, Math.floor(v)) })} /></Field>
+                <Field label="Forma e dritares">
+                  <select
+                    value={w.shape?.type ?? 'rect'}
+                    onChange={(e) => {
+                      const t = e.target.value as ShapeType;
+                      if (t === 'rect') return patch({ shape: undefined });
+                      const base = { type: t } as NonNullable<WindowItem['shape']>;
+                      if (t === 'arch') base.rise = Math.round(Math.min(w.width / 2, w.height - 100));
+                      if (t === 'trapezoid') { base.lowH = Math.round(w.height / 2); base.lowSide = 'right'; }
+                      if (t === 'triangle') base.apex = 50;
+                      patch({ shape: base, kind: SHAPE_LABELS[t] });
+                    }}
+                  >
+                    {(Object.keys(SHAPE_LABELS) as ShapeType[]).map((k) => <option key={k} value={k}>{SHAPE_LABELS[k]}</option>)}
+                  </select>
+                </Field>
+                {w.shape?.type === 'arch' && (
+                  <Field label="Lartësia e harkut (mm)" hint={`Maksimumi ${Math.round(Math.min(w.width / 2, w.height - 100))} mm (gjysmërreth)`}>
+                    <NumInput value={w.shape.rise} min={50} onChange={(v) => patch({ shape: { ...w.shape!, rise: v } })} />
+                  </Field>
+                )}
+                {w.shape?.type === 'trapezoid' && (
+                  <>
+                    <Field label="Lartësia e anës së ulët (mm)" hint={`Lartësia ${w.height} mm është ana e lartë`}>
+                      <NumInput value={w.shape.lowH} min={100} onChange={(v) => patch({ shape: { ...w.shape!, lowH: v } })} />
+                    </Field>
+                    <Field label="Ana e ulët">
+                      <select value={w.shape.lowSide ?? 'right'} onChange={(e) => patch({ shape: { ...w.shape!, lowSide: e.target.value as 'left' | 'right' } })}>
+                        <option value="left">Majtas</option><option value="right">Djathtas</option>
+                      </select>
+                    </Field>
+                  </>
+                )}
+                {w.shape?.type === 'triangle' && (
+                  <Field label="Kulmi nga e majta (% e gjerësisë)" hint="50 = trekëndësh barakrah, 0 ose 100 = kënddrejtë">
+                    <NumInput value={w.shape.apex} min={0} max={100} onChange={(v) => patch({ shape: { ...w.shape!, apex: v } })} />
+                  </Field>
+                )}
               </div>
+              {isShaped(w.shape) && (
+                <div className="hint" style={{ marginTop: 8 }}>
+                  Gjerësia × lartësia janë përmasat e drejtkëndëshit rreth formës. Çmimi dhe qelqi llogariten sipas këtij drejtkëndëshi. Për formë: {normalizeShape(w.width, w.height, w.shape).warnings.join(' ') || 'në rregull'}.
+                </div>
+              )}
             </div>
             <details className="card">
               <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Opsione të avancuara (emri, qelqi, shënime, ndarja e dritares)</summary>
@@ -274,7 +311,7 @@ export default function WindowEditor() {
               <Field label="Shënime"><textarea value={w.notes} onChange={(e) => patch({ notes: e.target.value })} /></Field>
             </details>
             <details className="card">
-              <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Ndarja e dritares (për konfigurime të veçanta)</summary>
+              <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Ndarja e dritares (për konfigurime të veçanta){isShaped(w.shape) ? ' — nuk përdoret për forma të veçanta' : ''}</summary>
               <div className="row sp" style={{ marginTop: 10 }}>
                 <h2 style={{ margin: 0 }}>Ndarja e dritares</h2>
                 <button
@@ -313,7 +350,7 @@ export default function WindowEditor() {
             <div className="card">
               <h2>Vizatimi teknik 2D</h2>
               {sys && !sizeInvalid ? (
-                <Drawing2D W={w.width} H={w.height} layout={w.layout} params={sys.params} colorHex={colorHex} glassLabels={glassLabels} showKeys />
+                <Drawing2D W={w.width} H={w.height} layout={w.layout} params={sys.params} colorHex={colorHex} glassLabels={glassLabels} showKeys shape={w.shape} />
               ) : (
                 <div className="empty">Zgjidh sistemin dhe përmasat.</div>
               )}
@@ -327,7 +364,7 @@ export default function WindowEditor() {
 
       {tab === '3d' && sys && !sizeInvalid && (
         <div className="card">
-          <Window3D W={w.width} H={w.height} layout={w.layout} params={sys.params} colorHex={colorHex} glassThickness={glass?.thickness ?? 24} />
+          <Window3D W={w.width} H={w.height} layout={w.layout} params={sys.params} colorHex={colorHex} glassThickness={glass?.thickness ?? 24} shape={w.shape} />
           <div className="hint" style={{ marginTop: 6 }}>
             Tërhiq për ta rrotulluar, shtrëngo/rrota për zoom. Thellësia e kasës dhe e kanatit merren nga parametrat e sistemit (frameDepth, sashDepth); trashësia e qelqit nga lloji i qelqit.
           </div>

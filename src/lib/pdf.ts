@@ -25,6 +25,20 @@ function drawShapes(doc: jsPDF, d: Drawing, x: number, y: number, w: number, h: 
         doc.setLineWidth(Math.max(0.08, (s.sw ?? 1) * scale));
       }
       doc.rect(X(s.x), Y(s.y), s.w * scale, s.h * scale, hasFill && hasStroke ? 'FD' : hasFill ? 'F' : 'S');
+    } else if (s.k === 'poly') {
+      const hasFill = !!s.fill && s.fill !== 'none';
+      if (hasFill) doc.setFillColor(...hexToRgb(s.fill!));
+      doc.setDrawColor(...hexToRgb(s.stroke ?? '#1b2433'));
+      doc.setLineWidth(Math.max(0.08, (s.sw ?? 1) * scale));
+      const [first, ...rest] = s.pts;
+      const rel: number[][] = [];
+      let px = first[0], py = first[1];
+      for (const q of rest) {
+        rel.push([(q[0] - px) * scale, (q[1] - py) * scale]);
+        px = q[0];
+        py = q[1];
+      }
+      doc.lines(rel, X(first[0]), Y(first[1]), [1, 1], hasFill ? 'FD' : 'S', true);
     } else if (s.k === 'line') {
       doc.setDrawColor(...hexToRgb(s.stroke ?? '#1b2433'));
       doc.setLineWidth(Math.max(0.08, (s.sw ?? 1) * scale));
@@ -177,7 +191,7 @@ export function buildQuotationPdf(q: QuotationRec, opts: PdfOpts, showPricesOver
     doc.setFontSize(9);
     doc.text(String(idx + 1), M + 2, y + 6);
     if (q.showDrawings) {
-      const d = buildDrawing(w.width, w.height, w.layout, it.params, { dims: true, colorHex: it.colorHex, glassLabels: it.glassLabels });
+      const d = buildDrawing(w.width, w.height, w.layout, it.params, { dims: true, colorHex: it.colorHex, glassLabels: it.glassLabels, shape: w.shape });
       drawShapes(doc, d, M + 10, y + 3, imgW, rowH - 6);
     }
     let ty = y + 6;

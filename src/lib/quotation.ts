@@ -1,7 +1,5 @@
 import type { Calc, ColorDef, Project, WindowItem } from '../types';
 import { calcWindow, CalcCtx } from '../engine/calc';
-import { glassSize } from '../engine/calc';
-import { computeGeometry } from '../engine/geometry';
 
 export const QUOTE_STATUSES = ['Draft', 'Lëshuar', 'Pranuar', 'Refuzuar'] as const;
 export type QuoteStatus = (typeof QUOTE_STATUSES)[number];
@@ -55,17 +53,7 @@ export function makeItems(windows: WindowItem[], ctx: CalcCtx, colors: ColorDef[
     const sys = ctx.systems.get(w.systemId);
     const col = colors.find((c) => c.name === w.color);
     const glassLabels: Record<string, string> = {};
-    if (sys) {
-      const g = computeGeometry(w.width, w.height, w.layout, sys.params);
-      for (const cell of g.cells) {
-        try {
-          const s = glassSize(sys, cell, w.width, w.height);
-          glassLabels[cell.key] = `${s.gw}×${s.gh}`;
-        } catch {
-          /* ignore */
-        }
-      }
-    }
+    for (const g of calc.glass) glassLabels[g.cell] = `${g.w}×${g.h}`;
     const { id: _id, ...rest } = w;
     void _id;
     return {

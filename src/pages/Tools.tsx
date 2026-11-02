@@ -137,7 +137,7 @@ export function CalculatorPage() {
               </Field>
             </div>
             {qsys && quick.width > 0 && quick.height > 0 && (
-              <div style={{ marginTop: 10 }}><Drawing2D W={quick.width} H={quick.height} layout={quick.layout} params={qsys.params} /></div>
+              <div style={{ marginTop: 10 }}><Drawing2D W={quick.width} H={quick.height} layout={quick.layout} params={qsys.params} shape={quick.shape} /></div>
             )}
             <div className="row" style={{ marginTop: 10 }}>
               <select id="savepid" defaultValue="" style={{ flex: 1 }}>
