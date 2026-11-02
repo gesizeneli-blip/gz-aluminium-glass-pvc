@@ -1,4 +1,4 @@
-import type { Layout, OpenType } from '../types';
+import type { Layout, OpenType, SystemMode } from '../types';
 
 export interface GCell {
   key: string; // "col-row" (1-based)
@@ -98,8 +98,9 @@ export function computeGeometry(
 
 export const isSash = (o: OpenType) => o !== 'fixed';
 
-export function matchClass(o: OpenType): 'fixed' | 'turn' | 'tilt-turn' | 'tilt' | 'slide' | 'door' {
+export function matchClass(o: OpenType): 'fixed' | 'turn' | 'tilt-turn' | 'tilt' | 'slide' | 'fold' | 'door' {
   if (o === 'fixed') return 'fixed';
+  if (o.startsWith('fold')) return 'fold';
   if (o.startsWith('turn')) return 'turn';
   if (o.startsWith('tilt-turn')) return 'tilt-turn';
   if (o === 'tilt') return 'tilt';
@@ -113,6 +114,8 @@ export interface Preset {
   key: string;
   name: string;
   layout: Layout;
+  /** system modes this preset is offered for (default: swing + door) */
+  modes?: SystemMode[];
 }
 export const PRESETS: Preset[] = [
   { key: 'fixed', name: 'Dritare fikse e vetme', layout: { columns: [{ cells: [c('fixed')] }] } },
@@ -151,11 +154,13 @@ export const PRESETS: Preset[] = [
   },
   {
     key: 'sliding',
+    modes: ['slide'],
     name: 'Rrëshqitëse me dy krahë',
     layout: { columns: [{ cells: [c('slide-right')] }, { cells: [c('slide-left')] }] }
   },
   {
     key: 'balcony',
+    modes: ['swing', 'door'],
     name: 'Derë ballkoni',
     layout: { columns: [{ cells: [c('door-right')] }] }
   },
@@ -175,3 +180,93 @@ export const PRESETS: Preset[] = [
     layout: { columns: [{ cells: [c('fixed', 500), c('door-left')] }] }
   }
 ];
+
+/* ---------- Multi-sash builders (number of sashes depends on the size) ---------- */
+export const MAX_SASHES = 8;
+
+/** Suggest the number of sashes from the width and the largest comfortable sash width. */
+export function suggestSashCount(W: number, maxSashW: number): number {
+  if (!(maxSashW > 0) || !(W > 0)) return 1;
+  return Math.max(1, Math.min(MAX_SASHES, Math.ceil(W / maxSashW)));
+}
+
+/** n movable sliding sashes, alternating direction (S350 style). */
+export function slidingLayout(n: number): Layout {
+  const k = Math.max(1, Math.min(MAX_SASHES, Math.round(n)));
+  return { columns: Array.from({ length: k }, (_, i) => ({ cells: [c(i % 2 === 0 ? 'slide-right' : 'slide-left')] })) };
+}
+/** Fixed side + movable sashes (S560 "fikse anësore + e lëvizshme"). */
+export function slidingFixedSide(n: number, side: 'left' | 'right' = 'left'): Layout {
+  const k = Math.max(1, Math.min(MAX_SASHES - 1, Math.round(n)));
+  const mov = Array.from({ length: k }, (_, i) => ({ cells: [c(i % 2 === 0 ? 'slide-left' : 'slide-right')] }));
+  const fx = { cells: [c('fixed')] };
+  return { columns: side === 'left' ? [fx, ...mov] : [...mov, fx] };
+}
+/** n side-by-side turning sashes (PVC / alumin with 2+ sashes). */
+export function turnLayout(n: number): Layout {
+  const k = Math.max(1, Math.min(MAX_SASHES, Math.round(n)));
+  return { columns: Array.from({ length: k }, (_, i) => ({ cells: [c(k === 1 ? 'tilt-turn-right' : i % 2 === 0 ? 'tilt-turn-left' : 'turn-right')] })) };
+}
+/** Bifold: n panels folding to one side. */
+export function foldLayout(n: number, side: 'left' | 'right' = 'right'): Layout {
+  const k = Math.max(2, Math.min(MAX_SASHES, Math.round(n)));
+  return { columns: Array.from({ length: k }, () => ({ cells: [c(side === 'right' ? 'fold-right' : 'fold-left')] })) };
+}
+/** n fixed glass panels side by side. */
+export function fixedPanels(n: number): Layout {
+  const k = Math.max(1, Math.min(MAX_SASHES, Math.round(n)));
+  return { columns: Array.from({ length: k }, () => ({ cells: [c('fixed')] })) };
+}
+/** Fixed glass panel(s) with a hinged glass door at the end. */
+export function glassWithDoor(nFixed: number, doorSide: 'left' | 'right' = 'right'): Layout {
+  const k = Math.max(0, Math.min(MAX_SASHES - 1, Math.round(nFixed)));
+  const fx = Array.from({ length: k }, () => ({ cells: [c('fixed')] }));
+  const door = { cells: [c(doorSide === 'right' ? 'door-left' : 'door-right')] };
+  return { columns: doorSide === 'right' ? [...fx, door] : [door, ...fx] };
+}
+
+/** Which kind of "N sashes" builder a system mode supports (UI helper). */
+export type MultiKind = 'turn' | 'slide' | 'slide-fixed' | 'fold' | 'panels' | 'panels-door';
+export const MULTI_BY_MODE: Record<SystemMode, { kind: MultiKind; label: string; unit: string }[]> = {
+  swing: [{ kind: 'turn', label: 'Kanate me hapje', unit: 'kanate' }],
+  door: [{ kind: 'panels-door', label: 'Fikse + derë', unit: 'fikse' }],
+  slide: [
+    { kind: 'slide', label: 'Të gjitha të lëvizshme', unit: 'kanate' },
+    { kind: 'slide-fixed', label: 'Fikse anësore + të lëvizshme', unit: 'të lëvizshme' }
+  ],
+  fold: [{ kind: 'fold', label: 'Panele palosëse', unit: 'panele' }],
+  fixed: [{ kind: 'panels', label: 'Panele fikse', unit: 'panele' }]
+};
+export function buildMulti(kind: MultiKind, n: number): Layout {
+  switch (kind) {
+    case 'turn': return turnLayout(n);
+    case 'slide': return slidingLayout(n);
+    case 'slide-fixed': return slidingFixedSide(n);
+    case 'fold': return foldLayout(n);
+    case 'panels': return fixedPanels(n);
+    default: return glassWithDoor(n);
+  }
+}
+
+export function presetsFor(mode: SystemMode | undefined): Preset[] {
+  const m: SystemMode = mode ?? 'swing';
+  return PRESETS.filter((p) => (p.modes ?? ['swing', 'door']).includes(m));
+}
+
+/* ---------- Extra presets per system mode ---------- */
+PRESETS.push(
+  { key: 'slide-2', modes: ['slide'], name: 'Rrëshqitëse – 2 kanate të lëvizshme', layout: slidingLayout(2) },
+  { key: 'slide-3', modes: ['slide'], name: 'Rrëshqitëse – 3 kanate', layout: slidingLayout(3) },
+  { key: 'slide-4', modes: ['slide'], name: 'Rrëshqitëse – 4 kanate', layout: slidingLayout(4) },
+  { key: 'slide-fixed-1', modes: ['slide'], name: 'Fikse anësore + 1 e lëvizshme', layout: slidingFixedSide(1) },
+  { key: 'slide-fixed-2', modes: ['slide'], name: 'Fikse anësore + 2 të lëvizshme', layout: slidingFixedSide(2) },
+  { key: 'fold-3', modes: ['fold'], name: 'Palosje – 3 panele', layout: foldLayout(3) },
+  { key: 'fold-4', modes: ['fold'], name: 'Palosje – 4 panele', layout: foldLayout(4) },
+  { key: 'fold-5', modes: ['fold'], name: 'Palosje – 5 panele', layout: foldLayout(5) },
+  { key: 'fold-6', modes: ['fold'], name: 'Palosje – 6 panele', layout: foldLayout(6) },
+  { key: 'panel-1', modes: ['fixed'], name: 'Një panel fiks (xham / pasqyrë)', layout: fixedPanels(1) },
+  { key: 'panel-2', modes: ['fixed'], name: '2 panele fikse', layout: fixedPanels(2) },
+  { key: 'panel-3', modes: ['fixed'], name: '3 panele fikse', layout: fixedPanels(3) },
+  { key: 'glass-door', modes: ['door'], name: 'Derë xhami (menteshë sipër + poshtë)', layout: { columns: [{ cells: [{ open: 'door-left' as OpenType }] }] } },
+  { key: 'glass-door-fixed', modes: ['door'], name: 'Derë xhami + fiks anësor', layout: glassWithDoor(1) }
+);

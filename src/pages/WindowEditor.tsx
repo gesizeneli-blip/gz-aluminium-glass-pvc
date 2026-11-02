@@ -4,7 +4,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { useCatalog } from '../lib/data';
 import { calcWindow } from '../engine/calc';
-import { PRESETS } from '../engine/geometry';
+import { PRESETS, presetsFor, buildMulti, suggestSashCount, MULTI_BY_MODE, MAX_SASHES } from '../engine/geometry';
+import { GROUP_ORDER } from '../db/seed';
 import { Drawing2D } from '../components/Drawing2D';
 import { Window3D } from '../components/Window3D';
 import { CalcBreakdown, CostTable } from '../components/CalcBreakdown';
@@ -17,7 +18,7 @@ export function defaultWindow(projectId: number, cat: Catalog, order: number): W
   const preset = PRESETS.find((p) => p.key === 'tilt-turn')!;
   return {
     projectId, name: `Poz. ${order + 1}`, kind: preset.name, width: 1000, height: 1200, qty: 1,
-    systemId: cat.systems[0]?.id ?? '', glassId: cat.glassTypes.find((g) => g.id === 'g-double')?.id ?? cat.glassTypes[0]?.id ?? '',
+    systemId: (cat.systems.find((x) => x.id === 'alu-open') ?? cat.systems[0])?.id ?? '', glassId: cat.glassTypes.find((g) => g.id === 'g-double')?.id ?? cat.glassTypes[0]?.id ?? '',
     cellGlass: {}, color: cat.colors[0]?.name ?? '', layout: JSON.parse(JSON.stringify(preset.layout)),
     pricing: { method: 'm2', unitPrice: 0, manualTotal: 0, marginPct: 20 },
     laborIds: cat.laborRates.filter((l) => l.defaultOn).map((l) => l.id), extras: [], lineOff: {}, extraPieces: [],
@@ -180,6 +181,37 @@ export default function WindowEditor() {
   const sym = cat.currency.symbol;
   const sizeInvalid = !(w.width >= 200 && w.height >= 200);
 
+  const groupedSystems = (() => {
+    const m = new Map<string, typeof cat.systems>();
+    cat.systems.forEach((x) => { const g = x.group ?? 'Të tjerë'; m.set(g, [...(m.get(g) ?? []), x]); });
+    const ord = (g: string) => { const i = GROUP_ORDER.indexOf(g); return i < 0 ? 99 : i; };
+    return [...m.entries()].sort((a, b) => ord(a[0]) - ord(b[0]));
+  })();
+
+  const changeSystem = (id: string) => {
+    const ns = cat.ctx.systems.get(id);
+    const p: Partial<WindowItem> = { systemId: id, lineOff: {}, extraPieces: [] };
+    if (ns?.defaultGlassId && cat.ctx.glass.has(ns.defaultGlassId)) { p.glassId = ns.defaultGlassId; p.cellGlass = {}; }
+    // the current layout may not exist for the new system type (e.g. sliding -> bifold): switch to its first model
+    const okPresets = presetsFor(ns?.mode);
+    if (!okPresets.some((x) => x.name === w.kind)) {
+      const first = okPresets[0];
+      if (first && ns?.mode !== sys?.mode) {
+        const n = ns?.params.maxSashW ? suggestSashCount(w.width, ns.params.maxSashW) : 0;
+        const multi = ns?.mode ? MULTI_BY_MODE[ns.mode]?.[0] : undefined;
+        if (multi && n > 1) { p.layout = buildMulti(multi.kind, n); p.kind = `${multi.label} (${n})`; }
+        else { p.layout = JSON.parse(JSON.stringify(first.layout)); p.kind = first.name; }
+        p.shape = undefined;
+      }
+    }
+    patch(p);
+  };
+
+  const multiOpts = sys?.mode ? MULTI_BY_MODE[sys.mode] ?? [] : [];
+  const sashSuggest = sys?.params.maxSashW ? suggestSashCount(w.width, sys.params.maxSashW) : 0;
+  const applyMulti = (kind: (typeof multiOpts)[number], n: number) =>
+    patch({ layout: buildMulti(kind.kind, n), kind: `${kind.label} (${n})`, cellGlass: {}, lineOff: {}, shape: undefined });
+
   const applyPreset = (key: string) => {
     const p = PRESETS.find((x) => x.key === key);
     if (p) patch({ layout: JSON.parse(JSON.stringify(p.layout)), kind: p.name, cellGlass: {}, lineOff: {}, shape: undefined });
@@ -230,15 +262,19 @@ export default function WindowEditor() {
                 <Field label="Gjerësia (mm)"><NumInput value={w.width} min={0} onChange={(v) => patch({ width: v })} /></Field>
                 <Field label="Lartësia (mm)"><NumInput value={w.height} min={0} onChange={(v) => patch({ height: v })} /></Field>
                 <Field label="Prodhuesi / sistemi">
-                  <select value={w.systemId} onChange={(e) => patch({ systemId: e.target.value, lineOff: {}, extraPieces: [] })}>
-                    {cat.systems.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.material === 'pvc' ? 'PVC' : 'Alumin'})</option>)}
+                  <select value={w.systemId} onChange={(e) => changeSystem(e.target.value)}>
+                    {groupedSystems.map(([g, list]) => (
+                      <optgroup key={g} label={g}>
+                        {list.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </optgroup>
+                    ))}
                   </select>
                 </Field>
                 <Field label="Modeli i hapjes">
                   <select value="" onChange={(e) => e.target.value && applyPreset(e.target.value)}>
                     <option value="">{w.kind} (ndrysho…)</option>
                     <optgroup label="Standarde">
-                      {PRESETS.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}
+                      {presetsFor(sys?.mode).map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}
                     </optgroup>
                     {templates.length > 0 && (
                       <optgroup label="Të personalizuara">
@@ -247,6 +283,20 @@ export default function WindowEditor() {
                     )}
                   </select>
                 </Field>
+                {multiOpts.length > 0 && (
+                  <Field label={`Numri i pjesëve${sashSuggest > 1 ? ` (sugjerim për ${w.width} mm: ${sashSuggest})` : ''}`}>
+                    <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
+                      {multiOpts.map((m) => (
+                        <select key={m.kind} value="" onChange={(e) => e.target.value && applyMulti(m, Number(e.target.value))}>
+                          <option value="">{m.label}…</option>
+                          {Array.from({ length: MAX_SASHES - 1 }, (_, i) => i + 1).map((n) => (
+                            <option key={n} value={n}>{n} {m.unit}</option>
+                          ))}
+                        </select>
+                      ))}
+                    </div>
+                  </Field>
+                )}
                 <Field label="Ngjyra">
                   <select value={w.color} onChange={(e) => patch({ color: e.target.value })}>
                     {cat.colors.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}

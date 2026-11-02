@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { evaluate } from '../src/engine/formula';
 import { optimizeCuts } from '../src/engine/optimizer';
 import { calcWindow, CalcCtx, DEFAULT_CATEGORIES, sumCalcs } from '../src/engine/calc';
-import { computeGeometry, PRESETS } from '../src/engine/geometry';
+import { computeGeometry, PRESETS, presetsFor, buildMulti, suggestSashCount, matchClass } from '../src/engine/geometry';
 import { buildSystemsAndProfiles, ACCESSORIES, GLASS_TYPES, LABOR_RATES } from '../src/db/seed';
 import type { WindowItem } from '../src/types';
 import { insetPolygon, outline, segments, shapePerimeter } from '../src/engine/shapes';
@@ -43,6 +43,8 @@ t('cutting: oversize piece reported', () => {
 });
 
 const { systems, profiles } = buildSystemsAndProfiles();
+// PVC system first (tests below use its weldAllow param)
+systems.sort((a, b) => Number(b.id === 'kom76md') - Number(a.id === 'kom76md'));
 const ctx = (): CalcCtx => ({
   systems: new Map(systems.map((s) => [s.id, s])),
   profiles: new Map(profiles.map((p) => [p.id, p])),
@@ -53,7 +55,7 @@ const ctx = (): CalcCtx => ({
 });
 
 const win = (over: Partial<WindowItem> = {}): WindowItem => ({
-  projectId: 1, name: 'D1', kind: 'x', width: 1200, height: 1500, qty: 1, systemId: 'trocal70', glassId: 'g-double',
+  projectId: 1, name: 'D1', kind: 'x', width: 1200, height: 1500, qty: 1, systemId: 'kom76md', glassId: 'g-double',
   cellGlass: {}, color: 'E bardhë',
   layout: PRESETS.find((p) => p.key === 'double-turn')!.layout,
   pricing: { method: 'm2', unitPrice: 10000, manualTotal: 0, marginPct: 20 },
@@ -72,7 +74,7 @@ t('geometry double sash', () => {
 t('profile pieces + glass from real deductions (not outer size)', () => {
   const c = calcWindow(win(), ctx());
   assert.deepEqual(c.errors, []);
-  const frame = c.pieces.filter((p) => p.profileId === 'trocal70-frame');
+  const frame = c.pieces.filter((p) => p.profileId === 'kom76md-frame');
   const total = frame.reduce((s, p) => s + p.length * p.qty, 0);
   assert.equal(total, 2 * 1200 + 2 * 1500);
   // sash glass = SW - 2*sashW = 500-150 = 350 ; SH-150 = 1230
@@ -85,8 +87,8 @@ t('profile pieces + glass from real deductions (not outer size)', () => {
 
 t('costs, price, profit; purchase separate from selling', () => {
   const cx = ctx();
-  cx.profiles.get('trocal70-frame')!.purchasePerM = 10;
-  cx.profiles.get('trocal70-frame')!.sellPerM = 15;
+  cx.profiles.get('kom76md-frame')!.purchasePerM = 10;
+  cx.profiles.get('kom76md-frame')!.sellPerM = 15;
   cx.glass.get('g-double')!.purchasePerM2 = 2000;
   cx.glass.get('g-double')!.sellPerM2 = 3000;
   const c = calcWindow(win({ qty: 2 }), cx);
@@ -111,8 +113,8 @@ t('pricing methods', () => {
 
 t('manual adjustments: disable line + extra piece', () => {
   const cx = ctx();
-  const c = calcWindow(win({ lineOff: { 'f-h': true }, extraPieces: [{ profileId: 'trocal70-frame', length: 500, qty: 1, label: 'x' }] }), cx);
-  const frame = c.pieces.filter((p) => p.profileId === 'trocal70-frame');
+  const c = calcWindow(win({ lineOff: { 'f-h': true }, extraPieces: [{ profileId: 'kom76md-frame', length: 500, qty: 1, label: 'x' }] }), cx);
+  const frame = c.pieces.filter((p) => p.profileId === 'kom76md-frame');
   assert.equal(frame.reduce((s, p) => s + p.length * p.qty, 0), 2 * 1500 + 500);
   const c2 = calcWindow(win({ accQty: { handle: 5 } }), cx);
   assert.equal(c2.accessories.find((a) => a.accessoryId === 'handle')!.qty, 5);
@@ -126,8 +128,8 @@ t('systems have independent recipes', () => {
 
 t('bad formula reported, not thrown', () => {
   const cx = ctx();
-  const s = { ...cx.systems.get('trocal70')!, recipe: [{ ...cx.systems.get('trocal70')!.recipe[0], lengthFormula: 'W + zzz' }] };
-  cx.systems.set('trocal70', s);
+  const s = { ...cx.systems.get('kom76md')!, recipe: [{ ...cx.systems.get('kom76md')!.recipe[0], lengthFormula: 'W + zzz' }] };
+  cx.systems.set('kom76md', s);
   const c = calcWindow(win(), cx);
   assert.ok(c.errors.length > 0);
 });
@@ -137,6 +139,46 @@ t('all presets compute on all systems', () => {
     const c = calcWindow(win({ systemId: s.id, layout: p.layout, width: 1800, height: 2100 }), ctx());
     assert.deepEqual(c.errors, [], `${s.id}/${p.key}`);
   }
+});
+
+t('catalogue: required systems exist with groups and modes', () => {
+  const ids = ['alu-open', 'alu-slide', 'alumil-s67', 'alumil-s77', 'alumil-s350', 'alumil-s560', 'kom76md', 'kom76ad', 'weiss72ad', 'weiss60ad',
+    'bifold-alu', 'bifold-glass', 'mirror', 'partition-glass', 'glass-door', 'shower-slide', 'shower-door', 'shower-fold', 'shower-fixed'];
+  for (const id of ids) {
+    const s = systems.find((x) => x.id === id);
+    assert.ok(s, id); assert.ok(s!.group && s!.mode, id + ' group/mode');
+    assert.equal(s!.verified, false);
+  }
+  assert.equal(new Set(systems.map((x) => x.id)).size, systems.length);
+  for (const pr of profiles) assert.ok(systems.some((x) => x.id === pr.systemId), pr.id);
+  const ch = profiles.find((p) => p.id === 'partition-glass-channel')!;
+  assert.ok(ch);
+  const c = calcWindow(win({ systemId: 'partition-glass', layout: buildMulti('panels', 2), width: 2000, height: 2200, glassId: 'g-tempered10' }), ctx());
+  assert.deepEqual(c.errors, []);
+  const piece = c.pieces.find((p) => p.profileId === 'partition-glass-channel')!;
+  assert.equal(piece.length, 2000, 'bottom channel runs the full width');
+  assert.equal(c.glass.length, 2);
+});
+
+t('presets by mode and multi-sash builders', () => {
+  assert.ok(presetsFor('slide').every((p) => p.layout.columns.every((cl) => cl.cells.every((x) => x.open === 'fixed' || x.open.startsWith('slide')))));
+  assert.ok(presetsFor('fold').length >= 3 && presetsFor('fixed').length >= 3 && presetsFor('swing').length >= 10);
+  assert.equal(suggestSashCount(2600, 900), 3);
+  assert.equal(suggestSashCount(800, 900), 1);
+  assert.equal(buildMulti('slide', 3).columns.length, 3);
+  const sf = buildMulti('slide-fixed', 1);
+  assert.equal(sf.columns[0].cells[0].open, 'fixed');
+  assert.ok(sf.columns[1].cells[0].open.startsWith('slide'));
+  assert.equal(matchClass('fold-right'), 'fold');
+  const f = buildMulti('fold', 4);
+  const c = calcWindow(win({ systemId: 'bifold-alu', layout: f, width: 3200, height: 2200 }), ctx());
+  assert.deepEqual(c.errors, []);
+  assert.equal(c.accessories.find((a) => a.accessoryId === 'fold-hinge')!.qty, 8, '2 hinges x 4 panels');
+  const gd = calcWindow(win({ systemId: 'glass-door', layout: buildMulti('panels-door', 1), width: 1000, height: 2100, glassId: 'g-tempered10' }), ctx());
+  assert.equal(gd.accessories.find((a) => a.accessoryId === 'glass-handle-320')!.qty, 1);
+  assert.equal(gd.accessories.find((a) => a.accessoryId === 'glass-hinge')!.qty, 2);
+  const m = calcWindow(win({ systemId: 'mirror', layout: buildMulti('panels', 1), width: 600, height: 800, glassId: 'g-mirror5' }), ctx());
+  assert.ok(Math.abs(m.accessories.find((a) => a.accessoryId === 'polish')!.qty - 2.8) < 1e-9);
 });
 
 t('shapes: arch semicircle, trapezoid, triangle, oval segments', () => {
@@ -168,7 +210,7 @@ t('shaped window: frame by segments, bounding-rect glass and price', () => {
   const w = win({ shape: { type: 'arch', rise: 500 }, width: 1000, height: 1500, layout: PRESETS[0].layout });
   const c = calcWindow(w, cx);
   assert.deepEqual(c.errors, []);
-  const frame = c.pieces.filter((p) => p.profileId === 'trocal70-frame');
+  const frame = c.pieces.filter((p) => p.profileId === 'kom76md-frame');
   assert.equal(frame.reduce((a, p) => a + p.qty, 0), 4);
   assert.ok(frame.some((p) => Math.abs(p.length - Math.PI * 500) < 1));
   assert.equal(c.glass.length, 1);

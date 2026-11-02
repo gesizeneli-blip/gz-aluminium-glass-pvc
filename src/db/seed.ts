@@ -1,4 +1,4 @@
-import type { Accessory, AccLine, ColorDef, GlassType, LaborRate, Material, Profile, ProfileCategory, RecipeLine, System } from '../types';
+import type { Accessory, AccLine, ColorDef, GlassType, LaborRate, Material, Profile, ProfileCategory, RecipeLine, System, SystemMode } from '../types';
 import { DEFAULT_CATEGORIES } from '../engine/calc';
 
 /**
@@ -10,25 +10,60 @@ import { DEFAULT_CATEGORIES } from '../engine/calc';
  * Everything can be edited, duplicated or deleted in the app.
  */
 
+export const SEED_VERSION = 2;
 const uid = (p: string, n: string) => `${p}-${n}`;
 
+/** What the owner gave us as real numbers: 3 cm bottom channel, 32 cm glass handles. Everything else is 0 / to be verified. */
+export const CHANNEL_MM = 30;
+export const GLASS_HANDLE_MM = 320;
+
+type Kind = 'frame' | 'glass';
 interface SysSpec {
   id: string;
   name: string;
+  group: string;
+  mode: SystemMode;
   material: Material;
+  kind: Kind;
   depth: number;
   frameW: number;
   sashW: number;
   mullionW: number;
+  maxSashW?: number;
+  defaultGlass: string;
+  /** glass systems: which profile lines exist */
+  glassLines?: ('channel' | 'track-top' | 'track-bottom')[];
+  topBottomTracks?: boolean;
+  note?: string;
 }
 
+const FR = (id: string, name: string, group: string, mode: SystemMode, material: 'pvc' | 'alu', depth: number, frameW: number, sashW: number, mullionW: number, maxSashW: number, note = ''): SysSpec =>
+  ({ id, name, group, mode, material, kind: 'frame', depth, frameW, sashW, mullionW, maxSashW, defaultGlass: 'g-double', note });
+const GL = (id: string, name: string, group: string, mode: SystemMode, glass: string, lines: SysSpec['glassLines'], note = ''): SysSpec =>
+  ({ id, name, group, mode, material: 'glass', kind: 'glass', depth: CHANNEL_MM, frameW: 0, sashW: 0, mullionW: 0, defaultGlass: glass, glassLines: lines, note });
+
+export const GROUP_ORDER = ['Alumin i thjeshtë', 'Alumil', 'PVC', 'Palosje (bifold)', 'Pasqyra', 'Ndarje ambienti', 'Kabina dushi'];
+
 const SPECS: SysSpec[] = [
-  { id: 'trocal70', name: 'TROCAL 70', material: 'pvc', depth: 70, frameW: 60, sashW: 75, mullionW: 80 },
-  { id: 'trocal76md', name: 'TROCAL 76 MD', material: 'pvc', depth: 76, frameW: 60, sashW: 75, mullionW: 80 },
-  { id: 'kommerling76md', name: 'Kömmerling 76 MD', material: 'pvc', depth: 76, frameW: 60, sashW: 75, mullionW: 80 },
-  { id: 'alumils67', name: 'Alumil S67', material: 'alu', depth: 67, frameW: 45, sashW: 55, mullionW: 55 },
-  { id: 'alumils560', name: 'Alumil S560', material: 'alu', depth: 60, frameW: 45, sashW: 55, mullionW: 55 },
-  { id: 'weiss72', name: 'WEISS 72', material: 'alu', depth: 72, frameW: 45, sashW: 55, mullionW: 55 }
+  FR('alu-open', 'Alumin i thjeshtë – me hapje', 'Alumin i thjeshtë', 'swing', 'alu', 50, 40, 45, 45, 1000, 'Xham dopio ose tek xham (zgjidhet te dritarja).'),
+  FR('alu-slide', 'Alumin i thjeshtë – me shinë', 'Alumin i thjeshtë', 'slide', 'alu', 50, 40, 45, 45, 1200, 'Xham dopio ose tek xham (zgjidhet te dritarja).'),
+  FR('alumil-s67', 'Alumil S67 (me hapje)', 'Alumil', 'swing', 'alu', 67, 45, 55, 55, 1000),
+  FR('alumil-s77', 'Alumil S77 (me hapje)', 'Alumil', 'swing', 'alu', 77, 45, 55, 55, 1000),
+  FR('alumil-s350', 'Alumil S350 – Skorevel (2 ose më shumë kanate të lëvizshme)', 'Alumil', 'slide', 'alu', 50, 45, 55, 55, 1200),
+  FR('alumil-s560', 'Alumil S560 – Skorevel (fikse anësore + e lëvizshme, ose të dyja të lëvizshme)', 'Alumil', 'slide', 'alu', 60, 45, 55, 55, 1200),
+  FR('kom76md', 'Kömmerling 76 MM MD', 'PVC', 'swing', 'pvc', 76, 60, 75, 80, 900, 'Figura me 2 ose më shumë kanate sipas përmasave.'),
+  FR('kom76ad', 'Kömmerling 76 MM AD', 'PVC', 'swing', 'pvc', 76, 60, 75, 80, 900, 'Figura me 2 ose më shumë kanate sipas përmasave.'),
+  FR('weiss72ad', 'Weiss 72 MM AD', 'PVC', 'swing', 'pvc', 72, 60, 75, 80, 900, 'Figura me 2 ose më shumë kanate sipas përmasave.'),
+  FR('weiss60ad', 'Weiss 60 MM AD', 'PVC', 'swing', 'pvc', 60, 55, 70, 75, 900, 'Figura me 2 ose më shumë kanate sipas përmasave.'),
+  { ...FR('bifold-alu', 'Palosje alumini (shinë sipër dhe poshtë)', 'Palosje (bifold)', 'fold', 'alu', 70, 45, 55, 55, 900), defaultGlass: 'g-tempered' },
+  GL('bifold-glass', 'Palosje vetëm xham (shinë vetëm sipër)', 'Palosje (bifold)', 'fold', 'g-tempered10', ['track-top']),
+  GL('mirror', 'Pasqyrë', 'Pasqyra', 'fixed', 'g-mirror5', [], 'Modelet e pasqyrave: shtoji te Materialet. Lustrimi i buzëve llogaritet për ml te aksesorët.'),
+  GL('partition-glass', 'Ndarje ambienti me xham (kasë 3 cm poshtë)', 'Ndarje ambienti', 'fixed', 'g-tempered10', ['channel'], 'Kasa/kanali poshtë 3 cm (30 mm).'),
+  GL('glass-door', 'Derë xhami (menteshë sipër + poshtë, dorezë 32 cm)', 'Ndarje ambienti', 'door', 'g-tempered10', [], 'Dorezat e xhamit 32 cm.'),
+  GL('shower-slide', 'Kabinë dushi – Skorevel (rrëshqitëse)', 'Kabina dushi', 'slide', 'g-tempered8', ['track-top', 'track-bottom']),
+  GL('shower-door', 'Kabinë dushi – me derë', 'Kabina dushi', 'door', 'g-tempered8', []),
+  GL('shower-fold', 'Kabinë dushi – me palosje', 'Kabina dushi', 'fold', 'g-tempered8', ['track-top']),
+  GL('shower-fixed', 'Kabinë dushi – vetëm xham fiks', 'Kabina dushi', 'fixed', 'g-tempered8', [])
 ];
 
 const GLASS_FORMULAS = {
@@ -41,13 +76,24 @@ const GLASS_FORMULAS = {
 function profilesFor(spec: SysSpec): Profile[] {
   const mk = (key: string, name: string, category: string): Profile => ({
     id: uid(spec.id, key), name: `${name} – ${spec.name}`, code: '', systemId: spec.id, category,
-    purchasePerM: 0, sellPerM: 0, barLength: 6500, customBarLength: undefined, kerf: 3, cutAllowance: 0,
+    purchasePerM: 0, sellPerM: 0, barLength: 6000, customBarLength: undefined, kerf: 3, cutAllowance: 0,
     wastePct: 0, formulaNote: '', stock: 0, supplier: '', notes: 'Çmimi dhe kodi: plotëso nga katalogu / furnitori.'
   });
+  if (spec.kind === 'glass') {
+    const out: Profile[] = [];
+    for (const l of spec.glassLines ?? []) {
+      if (l === 'channel') out.push(mk('channel', 'Kasë / kanal poshtë 3 cm', 'frame'));
+      if (l === 'track-top') out.push(mk('track-top', 'Shinë sipër', 'frame'));
+      if (l === 'track-bottom') out.push(mk('track-bottom', 'Shinë poshtë', 'frame'));
+    }
+    return out;
+  }
+  const slide = spec.mode === 'slide';
+  const fold = spec.mode === 'fold';
   const list = [
-    mk('frame', 'Kasë', 'frame'),
+    mk('frame', slide ? 'Kasë / shinë' : fold ? 'Kasë / shinë sipër-poshtë' : 'Kasë', 'frame'),
     mk('sash', 'Kanat', 'sash'),
-    mk('mullion', 'Montant / ndarëse', 'mullion'),
+    mk('mullion', slide ? 'Montant mbyllës' : 'Montant / ndarëse', 'mullion'),
     mk('bead', 'Fiksim qelqi (bead)', 'bead'),
     mk('gasket', 'Garniturë', 'gasket')
   ];
@@ -60,17 +106,26 @@ function profilesFor(spec: SysSpec): Profile[] {
 }
 
 function recipeFor(spec: SysSpec): RecipeLine[] {
+  const L = (id: string, label: string, scope: RecipeLine['scope'], profile: string, len: string, qty: string, kind: 'bar' | 'meter' = 'bar', enabled = true): RecipeLine => ({
+    id, label, scope, profileId: uid(spec.id, profile), kind, lengthFormula: len, qtyFormula: qty, enabled
+  });
+  if (spec.kind === 'glass') {
+    const lines: RecipeLine[] = [];
+    for (const l of spec.glassLines ?? []) {
+      if (l === 'channel') lines.push(L('ch', `Kasë / kanal poshtë ${CHANNEL_MM / 10} cm`, 'window', 'channel', 'W', '1'));
+      if (l === 'track-top') lines.push(L('tt', 'Shinë sipër', 'window', 'track-top', 'W', '1'));
+      if (l === 'track-bottom') lines.push(L('tb', 'Shinë poshtë', 'window', 'track-bottom', 'W', '1'));
+    }
+    return lines;
+  }
   const pvc = spec.material === 'pvc';
   const a = pvc ? 'weldAllow' : 'cutAdj';
-  const L = (id: string, label: string, scope: RecipeLine['scope'], profile: string, len: string, qty: string, kind: 'bar' | 'meter' = 'bar'): RecipeLine => ({
-    id, label, scope, profileId: uid(spec.id, profile), kind, lengthFormula: len, qtyFormula: qty, enabled: true
-  });
   const lines: RecipeLine[] = [
-    L('f-h', 'Kasë – pjesë horizontale', 'window', 'frame', `W + ${a}`, '2'),
+    L('f-h', spec.mode === 'swing' ? 'Kasë – pjesë horizontale' : 'Kasë / shinë – sipër dhe poshtë', 'window', 'frame', `W + ${a}`, '2'),
     L('f-v', 'Kasë – pjesë vertikale', 'window', 'frame', `H + ${a}`, '2'),
     L('s-h', 'Kanat – horizontale', 'sash', 'sash', `SW + ${a}`, '2'),
     L('s-v', 'Kanat – vertikale', 'sash', 'sash', `SH + ${a}`, '2'),
-    L('m-v', 'Montant vertikal', 'mullionV', 'mullion', 'MH + mullionAdd', '1'),
+    L('m-v', spec.mode === 'slide' ? 'Montant mbyllës vertikal' : 'Montant vertikal', 'mullionV', 'mullion', 'MH + mullionAdd', '1'),
     L('m-h', 'Ndarëse horizontale', 'mullionH', 'mullion', 'MH + mullionAdd', '1'),
     L('b-w', 'Fiksim qelqi – gjerësi', 'cell', 'bead', 'GW + beadAdd', '2'),
     L('b-h', 'Fiksim qelqi – lartësi', 'cell', 'bead', 'GH + beadAdd', '2'),
@@ -91,26 +146,55 @@ function recipeFor(spec: SysSpec): RecipeLine[] {
 }
 
 export const ACCESSORIES: Accessory[] = [
-  ['handle', 'Dorezë dritareje'],
-  ['gu-tt', 'Mekanizëm anim + hapje (GU)'],
-  ['gu-turn', 'Mekanizëm hapje'],
-  ['gu-tilt', 'Mekanizëm anim'],
-  ['hinge', 'Menteshë'],
-  ['lock', 'Mbyllës / pika mbyllëse'],
-  ['slide', 'Mekanizëm rrëshqitës'],
-  ['door-handle', 'Dorezë porte'],
-  ['cylinder', 'Cilindër brave'],
-  ['door-hinge', 'Menteshë porte'],
-  ['reze', 'Rezë'],
-  ['screws', 'Vida (set)'],
-  ['connector', 'Lidhëse / konektorë']
-].map(([id, name]) => ({ id, name, unit: 'copë', purchase: 0, sell: 0, stock: 0, supplier: '', notes: '' }));
+  ['handle', 'Dorezë dritareje', 'copë'],
+  ['gu-tt', 'Mekanizëm anim + hapje (GU)', 'copë'],
+  ['gu-turn', 'Mekanizëm hapje', 'copë'],
+  ['gu-tilt', 'Mekanizëm anim', 'copë'],
+  ['hinge', 'Menteshë', 'copë'],
+  ['lock', 'Mbyllës / pika mbyllëse', 'copë'],
+  ['slide', 'Mekanizëm rrëshqitës', 'copë'],
+  ['door-handle', 'Dorezë porte', 'copë'],
+  ['cylinder', 'Cilindër brave', 'copë'],
+  ['door-hinge', 'Menteshë porte', 'copë'],
+  ['reze', 'Rezë', 'copë'],
+  ['screws', 'Vida (set)', 'copë'],
+  ['connector', 'Lidhëse / konektorë', 'copë'],
+  ['glass-hinge', 'Menteshë xhami (sipër / poshtë)', 'copë'],
+  ['glass-handle-320', `Dorezë xhami ${GLASS_HANDLE_MM / 10} cm`, 'copë'],
+  ['glass-slide-kit', 'Set rrëshqitës për xham (rul + shinë)', 'copë'],
+  ['fold-hinge', 'Menteshë palosjeje', 'copë'],
+  ['fold-roller', 'Rul / karrel palosjeje', 'copë'],
+  ['fold-lock', 'Mbyllës palosjeje', 'copë'],
+  ['seal-strip', 'Gomë / garniturë xhami', 'ml'],
+  ['polish', 'Lustrim buzësh (për ml)', 'ml'],
+  ['mirror-hang', 'Set varëse pasqyre', 'copë']
+].map(([id, name, unit]) => ({ id, name, unit, purchase: 0, sell: 0, stock: 0, supplier: '', notes: '' }));
 
-function accRecipe(): AccLine[] {
+function accRecipeFor(spec: SysSpec): AccLine[] {
   const A = (id: string, label: string, accessoryId: string, match: AccLine['match'], qty: string): AccLine => ({
     id, label, accessoryId, match, qtyFormula: qty, enabled: true
   });
-  return [
+  if (spec.kind === 'glass') {
+    if (spec.id === 'mirror') {
+      return [
+        A('m-p', 'Lustrim buzësh (ml)', 'polish', 'window', '2*(W+H)/1000'),
+        A('m-h', 'Set varëse', 'mirror-hang', 'window', '1')
+      ];
+    }
+    const out: AccLine[] = [
+      A('g-d-h', 'Derë xhami: menteshë (sipër + poshtë)', 'glass-hinge', 'door', '2'),
+      A('g-d-d', `Derë xhami: dorezë ${GLASS_HANDLE_MM / 10} cm`, 'glass-handle-320', 'door', '1'),
+      A('g-s-k', 'Rrëshqitëse: set rrëshqitës', 'glass-slide-kit', 'slide', '1'),
+      A('g-s-h', `Rrëshqitëse: dorezë ${GLASS_HANDLE_MM / 10} cm`, 'glass-handle-320', 'slide', '1'),
+      A('g-f-h', 'Palosje: menteshë', 'fold-hinge', 'fold', '2'),
+      A('g-f-r', 'Palosje: rul', 'fold-roller', 'fold', '1'),
+      A('g-f-d', `Palosje: dorezë ${GLASS_HANDLE_MM / 10} cm`, 'glass-handle-320', 'fold', '1'),
+      A('g-w-p', 'Lustrim buzësh (ml)', 'polish', 'any-sash', '2*(SW+SH)/1000'),
+      A('g-w-s', 'Gomë / garniturë (ml)', 'seal-strip', 'window', '(W+2*H)/1000')
+    ];
+    return out;
+  }
+  const base = [
     A('tt-h', 'Anim+hapje: dorezë', 'handle', 'tilt-turn', '1'),
     A('tt-m', 'Anim+hapje: mekanizëm', 'gu-tt', 'tilt-turn', '1'),
     A('tt-hi', 'Anim+hapje: menteshë', 'hinge', 'tilt-turn', '2'),
@@ -125,6 +209,9 @@ function accRecipe(): AccLine[] {
     A('s-m', 'Rrëshqitëse: mekanizëm', 'slide', 'slide', '1'),
     A('s-h', 'Rrëshqitëse: dorezë', 'handle', 'slide', '1'),
     A('s-l', 'Rrëshqitëse: mbyllës', 'lock', 'slide', '1'),
+    A('f-hi', 'Palosje: menteshë', 'fold-hinge', 'fold', '2'),
+    A('f-r', 'Palosje: rul (sipër)', 'fold-roller', 'fold', '1'),
+    A('f-l', 'Palosje: mbyllës', 'fold-lock', 'fold', '1'),
     A('d-h', 'Derë: dorezë', 'door-handle', 'door', '1'),
     A('d-c', 'Derë: cilindër', 'cylinder', 'door', '1'),
     A('d-hi', 'Derë: menteshë', 'door-hinge', 'door', '3'),
@@ -132,6 +219,8 @@ function accRecipe(): AccLine[] {
     A('w-v', 'Vida (për dritare)', 'screws', 'window', '1'),
     A('w-c', 'Lidhëse (për dritare)', 'connector', 'window', '1')
   ];
+  if (spec.id === 'bifold-alu') base.push(A('f-r2', 'Palosje: rul (poshtë)', 'fold-roller', 'fold', '1'));
+  return base;
 }
 
 export function buildSystemsAndProfiles(): { systems: System[]; profiles: Profile[] } {
@@ -141,16 +230,19 @@ export function buildSystemsAndProfiles(): { systems: System[]; profiles: Profil
     const pvc = spec.material === 'pvc';
     const params: Record<string, number> = {
       frameW: spec.frameW, sashW: spec.sashW, mullionW: spec.mullionW,
-      frameDepth: spec.depth, sashDepth: spec.depth - 10,
+      frameDepth: spec.depth, sashDepth: spec.kind === 'glass' ? 12 : spec.depth - 10,
       sashAdd: 0, mullionAdd: 0, beadAdd: 0,
       fixedGlassDeduct: 0, sashRebate: 0, sashGlassDeduct: 0
     };
-    if (pvc) { params.weldAllow = 0; params.reinfDeduct = 0; } else { params.cutAdj = 0; }
+    if (spec.maxSashW) params.maxSashW = spec.maxSashW;
+    if (spec.kind === 'frame') { if (pvc) { params.weldAllow = 0; params.reinfDeduct = 0; } else params.cutAdj = 0; }
     systems.push({
-      id: spec.id, name: spec.name, material: spec.material, params,
-      glassFormulas: { ...GLASS_FORMULAS }, recipe: recipeFor(spec), accRecipe: accRecipe(),
+      id: spec.id, name: spec.name, material: spec.material, group: spec.group, mode: spec.mode,
+      defaultGlassId: spec.defaultGlass, params,
+      glassFormulas: { ...GLASS_FORMULAS }, recipe: recipeFor(spec), accRecipe: accRecipeFor(spec),
       verified: false,
-      notes: 'Vlera fillestare. Zbritjet/shtesat janë 0 dhe duhen plotësuar nga katalogu i prodhuesit. Gjerësitë e profileve (frameW, sashW, mullionW) dhe thellësitë janë vlera paraprake për vizatim.'
+      notes: (spec.note ? spec.note + ' ' : '') + 'Vlera fillestare. Zbritjet/shtesat janë 0 dhe duhen plotësuar nga katalogu i prodhuesit.'
+        + (spec.kind === 'glass' ? ' Sistem vetëm me xham: pa kasë anësore (frameW = 0).' : ' Gjerësitë e profileve (frameW, sashW, mullionW) dhe thellësitë janë vlera paraprake për vizatim.')
     });
     profiles.push(...profilesFor(spec));
   }
@@ -164,6 +256,10 @@ export const GLASS_TYPES: GlassType[] = [
   { id: 'g-triple', name: 'Triple xham', composition: '4+12+4+12+4', kind: 'Triple xham', thickness: 36 },
   { id: 'g-triplex', name: 'Triplex 3+3', composition: '3+3 triplex', kind: 'Laminuar (Triplex)', thickness: 6 },
   { id: 'g-tempered', name: 'Xham i kalitur 6 mm', composition: '6 mm i kalitur', kind: 'I kalitur', thickness: 6 },
+  { id: 'g-tempered8', name: 'Xham i kalitur 8 mm', composition: '8 mm i kalitur', kind: 'I kalitur', thickness: 8 },
+  { id: 'g-tempered10', name: 'Xham i kalitur 10 mm', composition: '10 mm i kalitur', kind: 'I kalitur', thickness: 10 },
+  { id: 'g-mirror4', name: 'Pasqyrë 4 mm', composition: '4 mm pasqyrë', kind: 'Pasqyrë', thickness: 4 },
+  { id: 'g-mirror5', name: 'Pasqyrë 5 mm', composition: '5 mm pasqyrë', kind: 'Pasqyrë', thickness: 5 },
   { id: 'g-frosted', name: 'Xham i mbrujtur (mat) 4 mm', composition: '4 mm mat', kind: 'I mbrujtur', thickness: 4 },
   { id: 'g-s67', name: 'Shembull S67: 3+3 Triplex + 4 + 3+3 Triplex termik', composition: '3+3 Triplex + 4 mm transparent + 3+3 Triplex thermal', kind: 'Kompozim i personalizuar', thickness: 16 },
   { id: 'g-s560', name: 'Shembull S560: 3+3 Triplex + 3+3 Triplex termik', composition: '3+3 Triplex + 3+3 Triplex thermal', kind: 'Kompozim i personalizuar', thickness: 12 }

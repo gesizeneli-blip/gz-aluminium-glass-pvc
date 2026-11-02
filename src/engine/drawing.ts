@@ -185,6 +185,18 @@ function openingSymbol(shapes: Shape[], open: OpenType, x: number, y: number, w:
     L(x + w, y, x + w / 2, y + h, dash);
   }
   const hx = turnLeft ? x + w - fs * 0.9 : x + fs * 0.9;
+  if (open.startsWith('fold')) {
+    // zig-zag fold symbol + arrow
+    const dir = open === 'fold-right' ? 1 : -1;
+    const x0 = dir > 0 ? x : x + w;
+    const seg = w / 4;
+    for (let i = 0; i < 4; i++) {
+      const xa = x0 + dir * seg * i;
+      const xb = x0 + dir * seg * (i + 1);
+      L(xa, i % 2 === 0 ? y + h * 0.3 : y + h * 0.7, xb, i % 2 === 0 ? y + h * 0.7 : y + h * 0.3);
+    }
+    return;
+  }
   if (open !== 'tilt' && !open.startsWith('slide')) {
     shapes.push({ k: 'rect', x: hx - fs * 0.2, y: y + h / 2 - fs * 0.9, w: fs * 0.4, h: fs * 1.8, fill: '#444', stroke: '#222', sw: u * 0.5 });
   }

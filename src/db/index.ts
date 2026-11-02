@@ -2,7 +2,7 @@ import Dexie, { Table } from 'dexie';
 import type {
   Accessory, Client, ColorDef, GlassType, LaborRate, Profile, ProfileCategory, Project, System, Template, WindowItem
 } from '../types';
-import { ACCESSORIES, buildSystemsAndProfiles, COLORS, DEFAULT_SETTINGS, GLASS_TYPES, LABOR_RATES, SEED_CATEGORIES } from './seed';
+import { ACCESSORIES, buildSystemsAndProfiles, COLORS, DEFAULT_SETTINGS, GLASS_TYPES, LABOR_RATES, SEED_CATEGORIES, SEED_VERSION } from './seed';
 import type { QuotationRec } from '../lib/quotation';
 
 export interface SettingRow {
@@ -45,7 +45,7 @@ export const TABLES = ['clients', 'projects', 'windows', 'systems', 'profiles', 
 
 export async function ensureSeed() {
   const done = await db.settings.get('seeded');
-  if (done) return;
+  if (done) return migrateSeed();
   const { systems, profiles } = buildSystemsAndProfiles();
   await db.transaction('rw', [db.systems, db.profiles, db.glassTypes, db.accessories, db.settings], async () => {
     await db.systems.bulkPut(systems);
@@ -61,8 +61,44 @@ export async function ensureSeed() {
       { key: 'laborRates', value: LABOR_RATES },
       { key: 'colors', value: COLORS },
       { key: 'categories', value: SEED_CATEGORIES },
-      { key: 'seeded', value: Date.now() }
+      { key: 'seeded', value: Date.now() },
+      { key: 'seedVersion', value: SEED_VERSION }
     ]);
+  });
+}
+
+const OLD_DEFAULT_SYSTEMS = ['trocal70', 'trocal76md', 'kommerling76md', 'alumils67', 'alumils560', 'weiss72'];
+
+/** Adds the new catalogue (never overwrites rows the owner may have edited) and removes untouched old defaults. */
+async function migrateSeed() {
+  const v = (await db.settings.get('seedVersion'))?.value ?? 1;
+  if (v >= SEED_VERSION) return;
+  const { systems, profiles } = buildSystemsAndProfiles();
+  const quotes = await db.quotations.toArray();
+  const usedInQuote = new Set<string>();
+  quotes.forEach((q: any) => (q.items ?? []).forEach((it: any) => it.sysId && usedInQuote.add(it.sysId)));
+  await db.transaction('rw', [db.systems, db.profiles, db.glassTypes, db.accessories, db.windows, db.settings], async () => {
+    const haveS = new Set((await db.systems.toCollection().primaryKeys()) as string[]);
+    const haveP = new Set((await db.profiles.toCollection().primaryKeys()) as string[]);
+    const haveG = new Set((await db.glassTypes.toCollection().primaryKeys()) as string[]);
+    const haveA = new Set((await db.accessories.toCollection().primaryKeys()) as string[]);
+    await db.systems.bulkAdd(systems.filter((x) => !haveS.has(x.id)));
+    await db.profiles.bulkAdd(profiles.filter((x) => !haveP.has(x.id)));
+    await db.glassTypes.bulkAdd(GLASS_TYPES.filter((x) => !haveG.has(x.id)));
+    await db.accessories.bulkAdd(ACCESSORIES.filter((x) => !haveA.has(x.id)));
+    for (const id of OLD_DEFAULT_SYSTEMS) {
+      const s = await db.systems.get(id);
+      if (!s) continue;
+      const profs = await db.profiles.where('systemId').equals(id).toArray();
+      const untouched = !s.verified && profs.every((p) => !p.purchasePerM && !p.sellPerM && !p.code) &&
+        Object.entries(s.params).every(([k, val]) => !['sashAdd', 'mullionAdd', 'beadAdd', 'fixedGlassDeduct', 'sashRebate', 'sashGlassDeduct', 'weldAllow', 'reinfDeduct', 'cutAdj'].includes(k) || val === 0);
+      const usedInWin = (await db.windows.where('systemId').equals(id).count()) > 0;
+      if (untouched && !usedInWin && !usedInQuote.has(id)) {
+        await db.profiles.where('systemId').equals(id).delete();
+        await db.systems.delete(id);
+      }
+    }
+    await db.settings.put({ key: 'seedVersion', value: SEED_VERSION });
   });
 }
 

@@ -1,4 +1,10 @@
-export type Material = 'pvc' | 'alu';
+export type Material = 'pvc' | 'alu' | 'glass';
+
+/** How the system behaves -> which opening models are offered */
+export type SystemMode = 'swing' | 'slide' | 'fold' | 'fixed' | 'door';
+export const MODE_LABELS: Record<SystemMode, string> = {
+  swing: 'Me hapje', slide: 'Me shinë (rrëshqitës)', fold: 'Me palosje', fixed: 'Fikse', door: 'Me derë'
+};
 
 export type OpenType =
   | 'fixed'
@@ -10,7 +16,9 @@ export type OpenType =
   | 'slide-left'
   | 'slide-right'
   | 'door-left'
-  | 'door-right';
+  | 'door-right'
+  | 'fold-left'
+  | 'fold-right';
 
 export const OPEN_LABELS: Record<OpenType, string> = {
   fixed: 'Fikse',
@@ -22,7 +30,9 @@ export const OPEN_LABELS: Record<OpenType, string> = {
   'slide-left': 'Rrëshqitëse ← ',
   'slide-right': 'Rrëshqitëse →',
   'door-left': 'Derë (menteshë majtas)',
-  'door-right': 'Derë (menteshë djathtas)'
+  'door-right': 'Derë (menteshë djathtas)',
+  'fold-left': 'Palosje (mbledhje majtas)',
+  'fold-right': 'Palosje (mbledhje djathtas)'
 };
 
 export type ShapeType = 'rect' | 'arch' | 'trapezoid' | 'triangle' | 'oval';
@@ -71,7 +81,7 @@ export interface RecipeLine {
   enabled: boolean;
 }
 
-export type AccMatch = 'window' | 'any-sash' | 'turn' | 'tilt-turn' | 'tilt' | 'slide' | 'door' | 'fixed';
+export type AccMatch = 'window' | 'any-sash' | 'turn' | 'tilt-turn' | 'tilt' | 'slide' | 'fold' | 'door' | 'fixed';
 
 export interface AccLine {
   id: string;
@@ -93,6 +103,11 @@ export interface System {
   id: string;
   name: string;
   material: Material;
+  /** group shown in the system picker, e.g. 'Alumil' */
+  group?: string;
+  mode?: SystemMode;
+  /** glass pre-selected when this system is chosen */
+  defaultGlassId?: string;
   params: Record<string, number>;
   glassFormulas: GlassFormulas;
   recipe: RecipeLine[];

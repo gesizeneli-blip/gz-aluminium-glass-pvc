@@ -55,8 +55,15 @@ function SystemEditor({ sys, onClose }: { sys: System; onClose: () => void }) {
       <div className="grid g3">
         <Field label="Emri"><input value={s.name} onChange={(e) => set({ name: e.target.value })} /></Field>
         <Field label="Materiali">
-          <select value={s.material} onChange={(e) => set({ material: e.target.value as 'pvc' | 'alu' })}>
-            <option value="pvc">PVC</option><option value="alu">Alumin</option>
+          <select value={s.material} onChange={(e) => set({ material: e.target.value as 'pvc' | 'alu' | 'glass' })}>
+            <option value="pvc">PVC</option><option value="alu">Alumin</option><option value="glass">Vetëm xham</option>
+          </select>
+        </Field>
+        <Field label="Grupi (në listën e sistemeve)"><input value={s.group ?? ''} onChange={(e) => set({ group: e.target.value })} /></Field>
+        <Field label="Lloji (përcakton modelet e hapjes)">
+          <select value={s.mode ?? 'swing'} onChange={(e) => set({ mode: e.target.value as any })}>
+            <option value="swing">Me hapje</option><option value="slide">Me shinë (rrëshqitës)</option>
+            <option value="fold">Me palosje</option><option value="fixed">Fikse</option><option value="door">Me derë</option>
           </select>
         </Field>
         <label className="chk"><input type="checkbox" checked={s.verified} onChange={(e) => set({ verified: e.target.checked })} /> E verifikuar nga unë (heq paralajmërimin)</label>
@@ -309,7 +316,7 @@ export default function Materials() {
               <div key={s.id} className="card">
                 <div className="row sp">
                   <h3 style={{ margin: 0 }}>{s.name}</h3>
-                  <span className="row"><span className="tag">{s.material === 'pvc' ? 'PVC' : 'Alumin'}</span>{s.verified ? <span className="tag ok">verifikuar</span> : <span className="tag bad">pa verifikuar</span>}</span>
+                  <span className="row"><span className="tag">{s.material === 'pvc' ? 'PVC' : s.material === 'glass' ? 'Xham' : 'Alumin'}</span>{s.verified ? <span className="tag ok">verifikuar</span> : <span className="tag bad">pa verifikuar</span>}</span>
                 </div>
                 <div className="muted small" style={{ margin: '6px 0' }}>
                   {cat.profiles.filter((p) => p.systemId === s.id).length} profile · {s.recipe.length} rreshta recete · {s.accRecipe.length} rreshta aksesorësh
