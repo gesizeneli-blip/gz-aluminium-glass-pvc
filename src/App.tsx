@@ -48,24 +48,27 @@ function Shell() {
           <div><b>GZ ALUMINIUM</b><span>GLASS &amp; PVC</span></div>
         </div>
         <nav className="nav">
-          {NAV.map(([to, ic, label]) => (
-            <NavLink key={to} to={to} end={to === '/'}>
+          {NAV.map(([to, ic, label], i) => (
+            <NavLink key={to} to={to} end={to === '/'} style={{ ['--i' as string]: i }}>
               <span className="ic">{ic}</span>{label}
             </NavLink>
           ))}
         </nav>
       </aside>
-      {open && <div style={{ position: 'fixed', inset: 0, zIndex: 35 }} onClick={() => setOpen(false)} />}
+      {open && <div className="scrim" onClick={() => setOpen(false)} />}
       <div className="main">
         <div className="topbar">
-          <button className="btn sm" onClick={() => setOpen(!open)} aria-label="Menu">☰ Menu</button>
+          <button className={'burger' + (open ? ' x' : '')} onClick={() => setOpen(!open)} aria-label="Menu" aria-expanded={open}>
+            <span /><span />
+          </button>
           <b>GZ Aluminium Glass &amp; PVC</b>
         </div>
         <div className="content">
           {!cat.ready ? (
             <div className="empty">Duke ngarkuar të dhënat…</div>
           ) : (
-            <Routes>
+            <div className="page" key={loc.pathname.replace(/\/window\/[^/]+$/, "/window")}>
+            <Routes location={loc}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/projects" element={<ProjectsPage />} />
               <Route path="/projects/:id" element={<ProjectDetail />} />
@@ -82,6 +85,7 @@ function Shell() {
               <Route path="/settings" element={<Settings />} />
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
+            </div>
           )}
         </div>
       </div>
