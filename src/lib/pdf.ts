@@ -191,7 +191,7 @@ export function buildQuotationPdf(q: QuotationRec, opts: PdfOpts, showPricesOver
     doc.setFontSize(9);
     doc.text(String(idx + 1), M + 2, y + 6);
     if (q.showDrawings) {
-      const d = buildDrawing(w.width, w.height, w.layout, it.params, { dims: true, colorHex: it.colorHex, glassLabels: it.glassLabels, shape: w.shape });
+      const d = buildDrawing(w.width, w.height, w.layout, it.params, { dims: true, colorHex: it.colorHex, glassLabels: it.glassLabels, shape: w.shape, shutter: w.shutter, nets: w.nets });
       drawShapes(doc, d, M + 10, y + 3, imgW, rowH - 6);
     }
     let ty = y + 6;

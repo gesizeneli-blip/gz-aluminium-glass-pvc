@@ -233,6 +233,35 @@ export interface ExtraPiece {
   label: string;
 }
 
+/** Roller shutter box above the window (roletë rrotulluese) */
+export interface ShutterDef {
+  enabled: boolean;
+  /** height of the shutter box in mm (sits above the window) */
+  boxH: number;
+  motor: boolean;
+}
+export const DEFAULT_SHUTTER: ShutterDef = { enabled: true, boxH: 250, motor: true };
+
+/** Prices for the shutter / net add-ons (owner fills in; 0 by default) */
+export interface ShutterRates {
+  costM2: number;
+  sellM2: number;
+  motorCost: number;
+  motorSell: number;
+  minArea: number;
+  netCostM2: number;
+  netSellM2: number;
+}
+export const DEFAULT_SHUTTER_RATES: ShutterRates = { costM2: 0, sellM2: 0, motorCost: 0, motorSell: 0, minArea: 0, netCostM2: 0, netSellM2: 0 };
+
+export interface AddonRow {
+  label: string;
+  qty: number;
+  unit: string;
+  cost: number; // per unit of window
+  sell: number;
+}
+
 export interface WindowItem {
   id?: number;
   projectId: number;
@@ -247,6 +276,10 @@ export interface WindowItem {
   color: string;
   layout: Layout;
   shape?: ShapeDef;
+  /** roller shutter above the window */
+  shutter?: ShutterDef;
+  /** insect screens (rrjeta) per cell key, e.g. { '1-1': true } */
+  nets?: Record<string, boolean>;
   pricing: Pricing;
   laborIds: string[];
   extras: ExtraCost[];
@@ -337,6 +370,7 @@ export interface Calc {
   profileUse: ProfileUse[];
   glass: GlassRow[];
   accessories: AccRow[];
+  addons?: AddonRow[];
   costs: CostBreakdown; // totals for qty
   materialSell: number; // totals for qty (profiles+glass+accessories at sell prices)
   extrasPrice: number;

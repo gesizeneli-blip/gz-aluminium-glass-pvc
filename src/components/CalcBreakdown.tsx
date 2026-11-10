@@ -197,6 +197,21 @@ export function CalcBreakdown({
           </tbody>
         </table>
       </div>
+      {calc.addons && calc.addons.length > 0 && (
+        <div>
+          <h3 style={{ marginTop: 14 }}>Roletë dhe rrjeta</h3>
+          <div className="tbl-wrap">
+            <table>
+              <thead><tr><th>Artikulli</th><th className="r">Sasia</th><th className="r">Blerja</th><th className="r">Shitja</th></tr></thead>
+              <tbody>
+                {calc.addons.map((a, i) => (
+                  <tr key={i}><td>{a.label}</td><td className="r">{num(a.qty, 2)} {a.unit}</td><td className="r">{money(a.cost, sym)}</td><td className="r">{money(a.sell, sym)}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
       {edit && Object.keys(w!.accQty).length > 0 && (
         <button className="btn sm" style={{ marginTop: 6 }} onClick={() => onPatch!({ accQty: {} })}>
           ↺ Rikthe sasitë automatike të aksesorëve

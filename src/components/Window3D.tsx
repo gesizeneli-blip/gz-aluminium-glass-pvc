@@ -2,12 +2,12 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { computeGeometry, isSash } from '../engine/geometry';
-import type { Layout, ShapeDef } from '../types';
+import type { Layout, ShapeDef, ShutterDef } from '../types';
 import { insetPolygon, isShaped, outline } from '../engine/shapes';
 
 /** Real 3D model generated from actual dimensions, frame/sash depth and glass thickness. */
 export function Window3D({
-  W, H, layout, params, colorHex, glassThickness, shape
+  W, H, layout, params, colorHex, glassThickness, shape, shutter, nets, lowered = 0.3
 }: {
   W: number;
   H: number;
@@ -16,6 +16,10 @@ export function Window3D({
   colorHex: string;
   glassThickness: number;
   shape?: ShapeDef;
+  shutter?: ShutterDef;
+  nets?: Record<string, boolean>;
+  /** how far the roller shutter curtain is pulled down, 0..1 */
+  lowered?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -113,6 +117,29 @@ export function Window3D({
       }
     }
     }
+    const extraMats: THREE.Material[] = [];
+    if (shutter?.enabled && shutter.boxH > 0) {
+      const bh = shutter.boxH;
+      const slatMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(colorHex).multiplyScalar(0.92), roughness: 0.45, metalness: 0.25 });
+      const motorMat = new THREE.MeshStandardMaterial({ color: 0x2f343a, metalness: 0.7, roughness: 0.4 });
+      extraMats.push(slatMat, motorMat);
+      const boxD = fd + 40;
+      add(0, -bh, W, bh, boxD, 0, frameMat);
+      // guide rails in front of the window sides
+      const railZ = fd / 2 + 14;
+      add(0, 0, 36, H, 24, railZ, frameMat);
+      add(W - 36, 0, 36, H, 24, railZ, frameMat);
+      // curtain (slats) pulled down by `lowered`
+      const drop = Math.max(0, Math.min(1, lowered)) * H;
+      const slat = 40;
+      for (let y = 0; y < drop - 1; y += slat) add(36, y, W - 72, Math.min(slat - 2, drop - y), 8, railZ, slatMat);
+      if (shutter.motor) add(W - 90, -bh / 2 - 40, 80, 80, boxD + 30, 0, motorMat);
+    }
+    if (nets) {
+      const netMat = new THREE.MeshBasicMaterial({ color: 0x66707c, transparent: true, opacity: 0.22, side: THREE.DoubleSide });
+      extraMats.push(netMat);
+      for (const c of g.cells) if (nets[c.key]) add(c.x, c.y, c.cw, c.ch, 2, -fd / 2 - 4, netMat);
+    }
     scene.add(group);
 
     const size = Math.max(W, H) * s;
@@ -145,11 +172,11 @@ export function Window3D({
         const m = o as THREE.Mesh;
         if (m.geometry) m.geometry.dispose();
       });
-      [frameMat, sashMat, glassMat, handleMat, edge].forEach((m) => m.dispose());
+      [frameMat, sashMat, glassMat, handleMat, edge, ...extraMats].forEach((m) => m.dispose());
       renderer.dispose();
       if (renderer.domElement.parentNode === el) el.removeChild(renderer.domElement);
     };
-  }, [W, H, layout, params, colorHex, glassThickness, shape]);
+  }, [W, H, layout, params, colorHex, glassThickness, shape, shutter, nets, lowered]);
 
   return <div ref={ref} className="three" />;
 }

@@ -4,13 +4,13 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { useCatalog } from '../lib/data';
 import { calcWindow } from '../engine/calc';
-import { PRESETS, presetsFor, buildMulti, suggestSashCount, MULTI_BY_MODE, MAX_SASHES } from '../engine/geometry';
+import { computeGeometry, PRESETS, presetsFor, buildMulti, suggestSashCount, MULTI_BY_MODE, MAX_SASHES } from '../engine/geometry';
 import { GROUP_ORDER } from '../db/seed';
 import { Drawing2D } from '../components/Drawing2D';
 import { Window3D } from '../components/Window3D';
 import { CalcBreakdown, CostTable } from '../components/CalcBreakdown';
 import { Field, NumInput, Tabs, Warnings, confirmDo } from '../components/ui';
-import { OPEN_LABELS, OpenType, PRICE_METHOD_LABELS, PriceMethod, WindowItem, Layout, SHAPE_LABELS, ShapeType } from '../types';
+import { OPEN_LABELS, DEFAULT_SHUTTER, OpenType, PRICE_METHOD_LABELS, PriceMethod, WindowItem, Layout, SHAPE_LABELS, ShapeType } from '../types';
 import { isShaped, normalizeShape } from '../engine/shapes';
 import type { Catalog } from '../lib/data';
 
@@ -120,6 +120,7 @@ export default function WindowEditor() {
   const [w, setW] = useState<WindowItem | null>(null);
   const [tab, setTab] = useState<'cfg' | '3d' | 'calc' | 'price'>('cfg');
   const [saved, setSaved] = useState(true);
+  const [lowered, setLowered] = useState(0.3);
   const templates = useLiveQuery(() => db.templates.toArray(), []) ?? [];
   const project = useLiveQuery(() => db.projects.get(projectId), [projectId]);
   const loaded = useRef(false);
@@ -207,6 +208,7 @@ export default function WindowEditor() {
     patch(p);
   };
 
+  const netCells = isShaped(w.shape) ? [] : computeGeometry(w.width, w.height, w.layout, sys?.params ?? {}).cells;
   const multiOpts = sys?.mode ? MULTI_BY_MODE[sys.mode] ?? [] : [];
   const sashSuggest = sys?.params.maxSashW ? suggestSashCount(w.width, sys.params.maxSashW) : 0;
   const applyMulti = (kind: (typeof multiOpts)[number], n: number) =>
@@ -348,6 +350,35 @@ export default function WindowEditor() {
                 </div>
               )}
             </div>
+            <div className="card">
+              <div className="row sp" style={{ marginBottom: 6 }}>
+                <b>Roletë rrotulluese dhe rrjeta</b>
+                <label className="chk"><input type="checkbox" checked={!!w.shutter?.enabled} onChange={(e) => patch({ shutter: { ...(w.shutter ?? DEFAULT_SHUTTER), enabled: e.target.checked } })} /> Me roletë rrotulluese</label>
+              </div>
+              {w.shutter?.enabled && (
+                <div className="grid g2">
+                  <Field label="Lartësia e kutisë së roletës (mm)" hint="Kutia vendoset sipër dritares, jashtë përmasave të dritares">
+                    <NumInput value={w.shutter.boxH} min={100} max={600} onChange={(v) => patch({ shutter: { ...w.shutter!, boxH: v } })} />
+                  </Field>
+                  <label className="chk" style={{ alignSelf: 'end' }}>
+                    <input type="checkbox" checked={w.shutter.motor} onChange={(e) => patch({ shutter: { ...w.shutter!, motor: e.target.checked } })} /> Me motor
+                  </label>
+                </div>
+              )}
+              {netCells.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <div className="small muted" style={{ marginBottom: 4 }}>Rrjetë kundër insekteve (zgjidh pjesët):</div>
+                  <div className="pill-row">
+                    {netCells.map((c) => (
+                      <label key={c.key} className="chk">
+                        <input type="checkbox" checked={!!w.nets?.[c.key]} onChange={(e) => patch({ nets: { ...(w.nets ?? {}), [c.key]: e.target.checked } })} /> Pjesa {c.key}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="hint" style={{ marginTop: 6 }}>Çmimet e roletës, motorit dhe rrjetës vendosen te Cilësimet → Punë krahu → Roletë dhe rrjeta.</div>
+            </div>
             <details className="card">
               <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Opsione të avancuara (emri, qelqi, shënime, ndarja e dritares)</summary>
               <div className="grid g2" style={{ marginTop: 10 }}>
@@ -400,7 +431,7 @@ export default function WindowEditor() {
             <div className="card">
               <h2>Vizatimi teknik 2D</h2>
               {sys && !sizeInvalid ? (
-                <Drawing2D W={w.width} H={w.height} layout={w.layout} params={sys.params} colorHex={colorHex} glassLabels={glassLabels} showKeys shape={w.shape} />
+                <Drawing2D W={w.width} H={w.height} layout={w.layout} params={sys.params} colorHex={colorHex} glassLabels={glassLabels} showKeys shape={w.shape} shutter={w.shutter} nets={w.nets} />
               ) : (
                 <div className="empty">Zgjidh sistemin dhe përmasat.</div>
               )}
@@ -414,7 +445,12 @@ export default function WindowEditor() {
 
       {tab === '3d' && sys && !sizeInvalid && (
         <div className="card">
-          <Window3D W={w.width} H={w.height} layout={w.layout} params={sys.params} colorHex={colorHex} glassThickness={glass?.thickness ?? 24} shape={w.shape} />
+          <Window3D W={w.width} H={w.height} layout={w.layout} params={sys.params} colorHex={colorHex} glassThickness={glass?.thickness ?? 24} shape={w.shape} shutter={w.shutter} nets={w.nets} lowered={lowered} />
+          {w.shutter?.enabled && (
+            <Field label={`Roleta e ulur: ${Math.round(lowered * 100)}%`}>
+              <input type="range" min={0} max={1} step={0.05} value={lowered} onChange={(e) => setLowered(Number(e.target.value))} />
+            </Field>
+          )}
           <div className="hint" style={{ marginTop: 6 }}>
             Tërhiq për ta rrotulluar, shtrëngo/rrota për zoom. Thellësia e kasës dhe e kanatit merren nga parametrat e sistemit (frameDepth, sashDepth); trashësia e qelqit nga lloji i qelqit.
           </div>

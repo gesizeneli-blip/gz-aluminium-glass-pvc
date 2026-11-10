@@ -344,7 +344,7 @@ export function ProjectDetail() {
         const sys = w && cat.ctx.systems.get(w.systemId);
         return w && sys ? (
           <Modal title={`${w.name} — ${w.width}×${w.height}`} onClose={() => setPreview(null)}>
-            <Drawing2D W={w.width} H={w.height} layout={w.layout} params={sys.params} colorHex={cat.colors.find((c) => c.name === w.color)?.hex} shape={w.shape} />
+            <Drawing2D W={w.width} H={w.height} layout={w.layout} params={sys.params} colorHex={cat.colors.find((c) => c.name === w.color)?.hex} shape={w.shape} shutter={w.shutter} nets={w.nets} />
           </Modal>
         ) : null;
       })()}

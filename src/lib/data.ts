@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo } from 'react';
 import { db } from '../db';
+import { DEFAULT_SHUTTER_RATES } from '../types';
 import type { Accessory, ColorDef, GlassType, LaborRate, Profile, ProfileCategory, System } from '../types';
 import { CalcCtx, DEFAULT_CATEGORIES } from '../engine/calc';
 import { DEFAULT_SETTINGS } from '../db/seed';
@@ -49,7 +50,8 @@ export function useCatalog(): Catalog {
         glass: new Map(gl.map((x) => [x.id, x])),
         acc: new Map(ac.map((x) => [x.id, x])),
         labor: laborRates,
-        categories
+        categories,
+        shutter: { ...DEFAULT_SHUTTER_RATES, ...(s.get('shutter') ?? {}) }
       }
     };
   }, [systems, profiles, glassTypes, accessories, settings]);

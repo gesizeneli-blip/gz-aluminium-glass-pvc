@@ -16,6 +16,8 @@ import type {
 } from '../types';
 import { evaluate } from './formula';
 import { computeGeometry, isSash, matchClass, GCell, Geometry } from './geometry';
+import type { AddonRow, ShutterRates } from '../types';
+import { DEFAULT_SHUTTER_RATES } from '../types';
 import { isShaped, segments, shapePerimeter, normalizeShape } from './shapes';
 
 export interface CalcCtx {
@@ -25,6 +27,7 @@ export interface CalcCtx {
   acc: Map<string, Accessory>;
   labor: LaborRate[];
   categories: ProfileCategory[];
+  shutter?: ShutterRates;
 }
 
 export const DEFAULT_CATEGORIES: ProfileCategory[] = [
@@ -78,6 +81,24 @@ export function glassSize(
   vars.GW = gw;
   vars.GH = gh;
   return { gw, gh, vars };
+}
+
+/** Roller shutter (curtain area W x H + optional motor) and insect screens (aperture area of the marked cells). */
+export function shutterAddons(w: WindowItem, ctx: CalcCtx, geom: Geometry): AddonRow[] {
+  const r: ShutterRates = { ...DEFAULT_SHUTTER_RATES, ...(ctx.shutter ?? {}) };
+  const rows: AddonRow[] = [];
+  const sh = w.shutter;
+  if (sh?.enabled) {
+    const area = Math.max(r.minArea, (w.width * w.height) / 1e6);
+    rows.push({ label: `Roletë rrotulluese (${Math.round(w.width)}×${Math.round(w.height)} mm)`, qty: Math.round(area * 1000) / 1000, unit: 'm²', cost: area * r.costM2, sell: area * r.sellM2 });
+    if (sh.motor) rows.push({ label: 'Motor për roletën', qty: 1, unit: 'copë', cost: r.motorCost, sell: r.motorSell });
+  }
+  const netCells = geom.cells.filter((c) => w.nets?.[c.key]);
+  if (netCells.length) {
+    const area = netCells.reduce((a, c) => a + (c.cw * c.ch) / 1e6, 0);
+    rows.push({ label: `Rrjetë kundër insekteve (${netCells.length} pjesë)`, qty: Math.round(area * 1000) / 1000, unit: 'm²', cost: area * r.netCostM2, sell: area * r.netSellM2 });
+  }
+  return rows;
 }
 
 export function calcWindow(w: WindowItem, ctx: CalcCtx): Calc {
@@ -310,8 +331,11 @@ export function calcWindow(w: WindowItem, ctx: CalcCtx): Calc {
     if (!w.laborIds.includes(lr.id)) continue;
     c.labor += lr.rate * (lr.unit === 'm2' ? area : lr.unit === 'ml' ? perimeter : 1);
   }
-  const extrasCostUnit = w.extras.reduce((s, e) => s + (e.cost || 0), 0);
-  const extrasPriceUnit = w.extras.reduce((s, e) => s + (e.price || 0), 0);
+  const addons = shutterAddons(w, ctx, geom);
+  const addCost = addons.reduce((a, r) => a + r.cost, 0);
+  const addSell = addons.reduce((a, r) => a + r.sell, 0);
+  const extrasCostUnit = w.extras.reduce((s, e) => s + (e.cost || 0), 0) + addCost;
+  const extrasPriceUnit = w.extras.reduce((s, e) => s + (e.price || 0), 0) + addSell;
   c.other += extrasCostUnit;
   c.material = c.profiles + c.reinforcement + c.glass + c.accessories + c.gaskets;
   c.total = c.material + c.labor + c.other;
@@ -340,7 +364,7 @@ export function calcWindow(w: WindowItem, ctx: CalcCtx): Calc {
   const totalArea = area * qty;
   return {
     qty, area, perimeter, errors, warnings,
-    pieces: mergedPieces, meters, profileUse, glass: glassRows, accessories: accRows,
+    pieces: mergedPieces, meters, profileUse, glass: glassRows, accessories: accRows, addons,
     costs, materialSell, extrasPrice, price, profit,
     marginPct: price > 0 ? (profit / price) * 100 : 0,
     profitPerM2: totalArea > 0 ? profit / totalArea : 0,

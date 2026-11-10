@@ -5,6 +5,7 @@ import { Field, NumInput, Tabs, confirmDo } from '../components/ui';
 import { download, todayISO, uid } from '../lib/format';
 import { connect, disconnect, getSyncState, onSyncState, replaceCloudWithLocal, syncLinked, syncNow, type SyncState } from '../sync/engine';
 import * as syncApi from '../sync/client';
+import { DEFAULT_SHUTTER_RATES } from '../types';
 
 function CloudPanel() {
   const [st, setSt] = useState<SyncState>(getSyncState());
@@ -180,6 +181,29 @@ export default function Settings() {
           </div>
           <button className="btn sm" style={{ marginTop: 8 }} onClick={() => setSetting('laborRates', [...cat.laborRates, { id: uid('l'), name: 'Tarifë e re', unit: 'm2', rate: 0, defaultOn: false }])}>+ Tarifë</button>
           <div className="hint">“Parazgjedhur” vlen për dritaret e reja. Për dritaret ekzistuese zgjidhet te dritarja → Kostoja dhe çmimi.</div>
+        </div>
+      )}
+
+      {tab === 'rates' && (
+        <div className="card">
+          <h2>Roletë rrotulluese dhe rrjeta (çmime)</h2>
+          {(() => {
+            const r = { ...DEFAULT_SHUTTER_RATES, ...(cat.ctx.shutter ?? {}) };
+            const up = (p: Partial<typeof r>) => setSetting('shutter', { ...r, ...p });
+            return (
+              <div className="grid g2">
+                <Field label={`Roleta: kosto për m² (${cat.currency.symbol})`}><NumInput value={r.costM2} min={0} onChange={(v) => up({ costM2: v })} /></Field>
+                <Field label={`Roleta: çmim shitjeje për m² (${cat.currency.symbol})`}><NumInput value={r.sellM2} min={0} onChange={(v) => up({ sellM2: v })} /></Field>
+                <Field label={`Motori: kosto (${cat.currency.symbol})`}><NumInput value={r.motorCost} min={0} onChange={(v) => up({ motorCost: v })} /></Field>
+                <Field label={`Motori: çmim shitjeje (${cat.currency.symbol})`}><NumInput value={r.motorSell} min={0} onChange={(v) => up({ motorSell: v })} /></Field>
+                <Field label="Sipërfaqja minimale e roletës (m²)"><NumInput value={r.minArea} min={0} onChange={(v) => up({ minArea: v })} /></Field>
+                <span />
+                <Field label={`Rrjeta: kosto për m² (${cat.currency.symbol})`}><NumInput value={r.netCostM2} min={0} onChange={(v) => up({ netCostM2: v })} /></Field>
+                <Field label={`Rrjeta: çmim shitjeje për m² (${cat.currency.symbol})`}><NumInput value={r.netSellM2} min={0} onChange={(v) => up({ netSellM2: v })} /></Field>
+              </div>
+            );
+          })()}
+          <div className="hint">Roleta llogaritet sipas gjerësisë × lartësisë së dritares; rrjeta sipas hapjes së pjesëve të zgjedhura. Çmimet fillojnë me 0: plotësoji ti.</div>
         </div>
       )}
 

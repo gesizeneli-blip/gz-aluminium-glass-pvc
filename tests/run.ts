@@ -181,6 +181,33 @@ t('presets by mode and multi-sash builders', () => {
   assert.ok(Math.abs(m.accessories.find((a) => a.accessoryId === 'polish')!.qty - 2.8) < 1e-9);
 });
 
+t('roller shutter + nets: drawing and pricing', () => {
+  const ctx2 = () => ({ ...ctx(), shutter: { costM2: 10, sellM2: 20, motorCost: 100, motorSell: 150, minArea: 0, netCostM2: 5, netSellM2: 8 } });
+  const w0 = win({ systemId: 'alumil-s560', layout: buildMulti('slide', 2), width: 2000, height: 1500 });
+  const base = calcWindow(w0, ctx2());
+  assert.equal(base.addons!.length, 0);
+  const w1 = { ...w0, shutter: { enabled: true, boxH: 250, motor: true }, nets: { '1-1': true } };
+  const c1 = calcWindow(w1, ctx2());
+  const sh = c1.addons!.find((a) => a.label.startsWith('Roletë'))!;
+  assert.ok(Math.abs(sh.qty - 3) < 1e-9, '2.0 x 1.5 m = 3 m2');
+  assert.ok(Math.abs(sh.cost - 30) < 1e-9 && Math.abs(sh.sell - 60) < 1e-9);
+  assert.equal(c1.addons!.find((a) => a.label.startsWith('Motor'))!.sell, 150);
+  const net = c1.addons!.find((a) => a.label.startsWith('Rrjet'))!;
+  assert.ok(net.qty > 0 && net.qty < 3);
+  assert.ok(c1.costs.total - base.costs.total > 130 + net.cost - 1e-6 && c1.price > base.price + 210, 'addons add to cost and price');
+  // drawing: box added on top, window moved down, viewBox taller
+  const d0 = buildDrawing(2000, 1500, w0.layout, ctx().systems.get('alumil-s560')!.params, { dims: true });
+  const d1 = buildDrawing(2000, 1500, w1.layout, ctx().systems.get('alumil-s560')!.params, { dims: true, shutter: w1.shutter, nets: w1.nets });
+  assert.equal(d1.vb.h, d0.vb.h + 250);
+  assert.ok(d1.shapes.length > d0.shapes.length);
+  const outer = d1.shapes.find((x) => x.k === 'rect' && x.w === 2000 && x.h === 1500) as any;
+  assert.equal(outer.y, 250, 'window starts below the box');
+  assert.ok(drawingToSvg(d1).includes('Kuti roletë'));
+  // disabled shutter changes nothing
+  const d2 = buildDrawing(2000, 1500, w0.layout, ctx().systems.get('alumil-s560')!.params, { dims: true, shutter: { enabled: false, boxH: 250, motor: true } });
+  assert.equal(d2.shapes.length, d0.shapes.length);
+});
+
 t('shapes: arch semicircle, trapezoid, triangle, oval segments', () => {
   const arch = segments(1000, 1500, { type: 'arch', rise: 500 });
   assert.ok(Math.abs(arch[2].len - Math.PI * 500) < 0.5, 'semicircle arc = pi*r');

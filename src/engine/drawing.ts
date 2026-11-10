@@ -1,4 +1,4 @@
-import type { Layout, OpenType, ShapeDef } from '../types';
+import type { Layout, OpenType, ShapeDef, ShutterDef } from '../types';
 import { computeGeometry, isSash } from './geometry';
 import { insetPolygon, isShaped, normalizeShape, outline, segments } from './shapes';
 
@@ -19,6 +19,8 @@ export interface DrawOpts {
   colorHex?: string;
   showKeys?: boolean;
   shape?: ShapeDef;
+  shutter?: ShutterDef;
+  nets?: Record<string, boolean>;
 }
 
 const INK = '#1b2433';
@@ -81,6 +83,78 @@ function buildShapedDrawing(W: number, H: number, shape: ShapeDef, params: Recor
 }
 
 export function buildDrawing(W: number, H: number, layout: Layout, params: Record<string, number>, opts: DrawOpts = {}): Drawing {
+  const d = buildWindowDrawing(W, H, layout, params, opts);
+  const sh = opts.shutter;
+  if (!sh?.enabled || !(sh.boxH > 0)) return d;
+  return addShutterBox(d, W, H, sh, opts);
+}
+
+/** Roller shutter box on top of the window: window shapes move down, the box is drawn above (top dimensions stay on top). */
+function addShutterBox(d: Drawing, W: number, H: number, sh: ShutterDef, opts: DrawOpts): Drawing {
+  const bh = sh.boxH;
+  const big = Math.max(W, H + bh);
+  const u = big / 600;
+  const fs = big / 42;
+  const dy = (y: number) => (y >= -1e-6 ? y + bh : y);
+  const above = (s: Shape) => {
+    if (s.k === 'rect') return s.y + s.h < -1e-6;
+    if (s.k === 'poly') return s.pts.every((p) => p[1] < -1e-6);
+    if (s.k === 'line') return s.y1 < -1e-6 && s.y2 < -1e-6;
+    return s.y < -1e-6;
+  };
+  const moved: Shape[] = d.shapes.map((s) => {
+    if (above(s)) return s;
+    if (s.k === 'rect') return { ...s, y: s.y + bh };
+    if (s.k === 'poly') return { ...s, pts: s.pts.map((p) => [p[0], p[1] + bh] as [number, number]) };
+    if (s.k === 'line') return { ...s, y1: dy(s.y1), y2: dy(s.y2) };
+    return { ...s, y: s.y + bh };
+  });
+  const frame = opts.colorHex || '#e9ecef';
+  const out: Shape[] = [];
+  // box
+  out.push({ k: 'rect', x: 0, y: 0, w: W, h: bh, fill: frame, stroke: INK, sw: u * 1.6 });
+  // slats seen through the inspection panel
+  const slatH = Math.max(bh / 8, 6);
+  for (let y = slatH; y < bh - slatH * 0.4; y += slatH) out.push({ k: 'line', x1: bh * 0.15, y1: y, x2: W - bh * 0.15, y2: y, stroke: '#9aa4b2', sw: u * 0.5 });
+  out.push({ k: 'rect', x: bh * 0.15, y: slatH * 0.5, w: W - bh * 0.3, h: bh - slatH, fill: 'none', stroke: INK, sw: u * 0.6 });
+  if (sh.motor) {
+    // motor symbol (circle with M) at the right end of the box
+    const r = Math.min(bh * 0.32, fs * 1.6);
+    const cx = W - bh * 0.15 - r * 1.4;
+    const cy = bh / 2;
+    const pts: [number, number][] = Array.from({ length: 20 }, (_, i) => [cx + r * Math.cos((i / 20) * Math.PI * 2), cy + r * Math.sin((i / 20) * Math.PI * 2)]);
+    out.push({ k: 'poly', pts, fill: '#fff', stroke: '#b4232a', sw: u * 0.9 });
+    out.push({ k: 'text', x: cx, y: cy + r * 0.38, s: 'M', size: r * 1.1, anchor: 'middle', fill: '#b4232a', bold: true });
+  }
+  out.push({ k: 'text', x: bh * 0.3, y: bh / 2 + fs * 0.3, s: 'Kuti roletë', size: Math.min(fs * 0.75, bh * 0.28), anchor: 'start', fill: '#444' });
+  // guide rails along both sides of the window
+  const rail = Math.max(18, W / 60);
+  out.push({ k: 'rect', x: 0, y: bh, w: rail * 0.6, h: H, fill: 'none', stroke: '#9aa4b2', sw: u * 0.6 });
+  out.push({ k: 'rect', x: W - rail * 0.6, y: bh, w: rail * 0.6, h: H, fill: 'none', stroke: '#9aa4b2', sw: u * 0.6 });
+  if (opts.dims !== false) {
+    const xl = -fs * 4.8;
+    out.push({ k: 'line', x1: xl, y1: 0, x2: xl, y2: bh, stroke: '#6b7280', sw: u * 0.7 });
+    out.push({ k: 'line', x1: -fs * 0.4, y1: 0, x2: xl - fs * 0.6, y2: 0, stroke: '#6b7280', sw: u * 0.7 });
+    out.push({ k: 'line', x1: -fs * 0.4, y1: bh, x2: xl - fs * 0.6, y2: bh, stroke: '#6b7280', sw: u * 0.7 });
+    out.push({ k: 'text', x: xl - fs * 0.5, y: bh / 2, s: `${Math.round(bh)}`, size: fs * 0.8, anchor: 'middle', rot: -90 });
+  }
+  const vb = d.vb;
+  const extra = opts.dims === false ? 0 : fs * 3;
+  return { shapes: [...moved, ...out], vb: { x: vb.x - extra, y: vb.y, w: vb.w + extra, h: vb.h + bh } };
+}
+
+function addNets(shapes: Shape[], cells: { key: string; x: number; y: number; cw: number; ch: number }[], nets: Record<string, boolean> | undefined, u: number) {
+  if (!nets) return;
+  for (const c of cells) {
+    if (!nets[c.key]) continue;
+    const step = Math.max(14, Math.min(c.cw, c.ch) / 14);
+    const x0 = c.x + 4, y0 = c.y + 4, x1 = c.x + c.cw - 4, y1 = c.y + c.ch - 4;
+    for (let x = x0 + step; x < x1; x += step) shapes.push({ k: 'line', x1: x, y1: y0, x2: x, y2: y1, stroke: '#7b8794', sw: u * 0.25 });
+    for (let y = y0 + step; y < y1; y += step) shapes.push({ k: 'line', x1: x0, y1: y, x2: x1, y2: y, stroke: '#7b8794', sw: u * 0.25 });
+  }
+}
+
+function buildWindowDrawing(W: number, H: number, layout: Layout, params: Record<string, number>, opts: DrawOpts = {}): Drawing {
   if (isShaped(opts.shape)) return buildShapedDrawing(W, H, opts.shape, params, opts);
   const g = computeGeometry(W, H, layout, params);
   const fw = params.frameW ?? 60;
@@ -126,6 +200,7 @@ export function buildDrawing(W: number, H: number, layout: Layout, params: Recor
     }
   }
 
+  addNets(shapes, g.cells, opts.nets, u);
   const mg = opts.dims === false ? 0 : fs * 4.2;
   if (opts.dims !== false) {
     const dimLine = (x1: number, y1: number, x2: number, y2: number) => {
