@@ -1,6 +1,7 @@
 import type { Calc, ColorDef, Project, WindowItem } from '../types';
 import { calcWindow, CalcCtx } from '../engine/calc';
 import { SHUTTER_KIND_LABELS } from '../types';
+import { money } from './format';
 
 export const QUOTE_STATUSES = ['Draft', 'Lëshuar', 'Pranuar', 'Refuzuar'] as const;
 export type QuoteStatus = (typeof QUOTE_STATUSES)[number];
@@ -45,7 +46,13 @@ export function itemDescription(w: WindowItem, calc: Calc, sysName: string, colo
   const glasses = [...new Set(calc.glass.map((g) => g.composition || g.glassName))];
   if (w.shutter?.only && w.shutter.enabled) {
     const nm = w.shutter.kind ? SHUTTER_KIND_LABELS[w.shutter.kind] : 'Grilë';
-    return [nm + (w.shutter.motor && w.shutter.kind !== 'persian' ? ' me motor' : w.shutter.kind === 'persian' ? '' : ' pa motor'), `ngjyra ${colorName}`].join(', ');
+    const q = Math.max(1, Math.floor(w.qty || 1));
+    const motorRow = calc.addons?.find((a) => a.label.startsWith('Motor'));
+    const gridSell = (calc.addons ?? []).filter((a) => !a.label.startsWith('Motor')).reduce((t, a) => t + a.sell, 0) * q;
+    const head = [nm + (motorRow ? ' me motor' : w.shutter.kind === 'persian' ? '' : ' pa motor'), `ngjyra ${colorName}`].join(', ');
+    return motorRow
+      ? `${head}. Çmimi: ${money(Math.round(gridSell), 'lek')} + motori ${money(Math.round(motorRow.sell * q), 'lek')}`
+      : head;
   }
   const parts = [`${w.kind || 'Dritare'}`, `sistemi ${sysName}`, `ngjyra ${colorName}`];
   if (glasses.length) parts.push(`qelq: ${glasses.join(' / ')}`);
