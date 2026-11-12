@@ -1,4 +1,5 @@
 import type { Layout, OpenType, PanelChoice, ShapeDef, ShutterDef, TrimDef } from '../types';
+import { SHUTTER_KIND_LABELS } from '../types';
 import { panelUrl } from '../data/panels';
 import { computeGeometry, isSash } from './geometry';
 import { insetPolygon, isShaped, normalizeShape, outline, segments } from './shapes';
@@ -98,10 +99,74 @@ function buildShapedDrawing(W: number, H: number, shape: ShapeDef, params: Recor
 }
 
 export function buildDrawing(W: number, H: number, layout: Layout, params: Record<string, number>, opts: DrawOpts = {}): Drawing {
-  const d = buildWindowDrawing(W, H, layout, params, opts);
   const sh = opts.shutter;
+  if (sh?.only) return buildShutterOnly(W, H, sh, opts);
+  const d = buildWindowDrawing(W, H, layout, params, opts);
   if (!sh?.enabled || !(sh.boxH > 0)) return d;
   return addShutterBox(d, W, H, sh, opts);
+}
+
+/** Shutter-only picture: box + curtain with slats (roller types) or two louvered leaves (persiane), with dimensions. */
+function buildShutterOnly(W: number, H: number, sh: ShutterDef, opts: DrawOpts): Drawing {
+  const persian = sh.kind === 'persian';
+  const bh = persian ? 0 : Math.max(0, sh.boxH || 0);
+  const big = Math.max(W, H + bh);
+  const u = big / 600;
+  const fs = big / 42;
+  const col = opts.colorHex || '#e9ecef';
+  const out: Shape[] = [];
+  const grey = '#9aa4b2';
+  if (persian) {
+    const gap = Math.max(6, W / 150);
+    const lw = (W - gap) / 2;
+    const bar = Math.max(30, Math.min(lw, H) / 12);
+    for (let i = 0; i < 2; i++) {
+      const x0 = i * (lw + gap);
+      out.push({ k: 'rect', x: x0, y: 0, w: lw, h: H, fill: col, stroke: INK, sw: u * 1.6 });
+      out.push({ k: 'rect', x: x0 + bar, y: bar, w: lw - 2 * bar, h: H - 2 * bar, fill: 'none', stroke: INK, sw: u * 0.8 });
+      const pitch = Math.max(bar * 0.9, 24);
+      for (let y = bar + pitch * 0.5; y < H - bar - pitch * 0.2; y += pitch) {
+        out.push({ k: 'line', x1: x0 + bar, y1: y + pitch * 0.25, x2: x0 + lw - bar, y2: y - pitch * 0.15, stroke: grey, sw: u * 0.8 });
+      }
+    }
+  } else {
+    out.push({ k: 'rect', x: 0, y: 0, w: W, h: bh, fill: col, stroke: INK, sw: u * 1.6 });
+    out.push({ k: 'text', x: bh * 0.3, y: bh / 2 + fs * 0.3, s: 'Kuti', size: Math.min(fs * 0.75, bh * 0.28), anchor: 'start', fill: '#444' });
+    const rail = Math.max(20, W / 50);
+    out.push({ k: 'rect', x: 0, y: bh, w: rail, h: H, fill: col, stroke: INK, sw: u * 1 });
+    out.push({ k: 'rect', x: W - rail, y: bh, w: rail, h: H, fill: col, stroke: INK, sw: u * 1 });
+    const slatH = sh.kind === 'alu' ? 55 : sh.kind === 'thermal' ? 45 : 50;
+    for (let y = bh + slatH; y < bh + H - slatH * 0.3; y += slatH) out.push({ k: 'line', x1: rail, y1: y, x2: W - rail, y2: y, stroke: grey, sw: u * 0.6 });
+    out.push({ k: 'rect', x: rail, y: bh + H - slatH * 0.8, w: W - 2 * rail, h: slatH * 0.8, fill: col, stroke: INK, sw: u * 1 });
+    if (sh.motor) {
+      const r = Math.min(Math.max(bh, 120) * 0.32, fs * 1.6);
+      const cx = W - rail - r * 1.6;
+      const cy = bh / 2;
+      const pts: [number, number][] = Array.from({ length: 20 }, (_, i) => [cx + r * Math.cos((i / 20) * Math.PI * 2), cy + r * Math.sin((i / 20) * Math.PI * 2)]);
+      out.push({ k: 'poly', pts, fill: '#fff', stroke: '#b4232a', sw: u * 0.9 });
+      out.push({ k: 'text', x: cx, y: cy + r * 0.38, s: 'M', size: r * 1.1, anchor: 'middle', fill: '#b4232a', bold: true });
+    }
+  }
+  const total = H + bh;
+  const label = sh.kind ? SHUTTER_KIND_LABELS[sh.kind] : 'Grilë';
+  out.push({ k: 'text', x: W / 2, y: bh + H / 2, s: label + (sh.motor && !persian ? ' + motor' : ''), size: fs * 0.9, anchor: 'middle', fill: '#27425f', bold: true });
+  if (opts.dims !== false) {
+    const yb = total + fs * 1.6;
+    out.push({ k: 'line', x1: 0, y1: yb, x2: W, y2: yb, stroke: '#6b7280', sw: u * 0.7 });
+    out.push({ k: 'line', x1: 0, y1: total + fs * 0.3, x2: 0, y2: yb + fs * 0.5, stroke: '#6b7280', sw: u * 0.7 });
+    out.push({ k: 'line', x1: W, y1: total + fs * 0.3, x2: W, y2: yb + fs * 0.5, stroke: '#6b7280', sw: u * 0.7 });
+    out.push({ k: 'text', x: W / 2, y: yb + fs * 1.4, s: `${Math.round(W)}`, size: fs, anchor: 'middle' });
+    const xl = -fs * 1.6;
+    out.push({ k: 'line', x1: xl, y1: bh, x2: xl, y2: total, stroke: '#6b7280', sw: u * 0.7 });
+    out.push({ k: 'line', x1: -fs * 0.3, y1: bh, x2: xl - fs * 0.5, y2: bh, stroke: '#6b7280', sw: u * 0.7 });
+    out.push({ k: 'line', x1: -fs * 0.3, y1: total, x2: xl - fs * 0.5, y2: total, stroke: '#6b7280', sw: u * 0.7 });
+    out.push({ k: 'text', x: xl - fs * 0.6, y: bh + H / 2, s: `${Math.round(H)}`, size: fs, anchor: 'middle', rot: -90 });
+    if (bh > 0) out.push({ k: 'text', x: W + fs * 0.6, y: bh / 2 + fs * 0.3, s: `kuti ${Math.round(bh)}`, size: fs * 0.7, anchor: 'start', fill: '#444' });
+  }
+  const padL = opts.dims === false ? fs : fs * 4;
+  const padR = opts.dims === false ? fs : fs * 5;
+  const padB = opts.dims === false ? fs : fs * 4;
+  return { shapes: out, vb: { x: -padL, y: -fs, w: W + padL + padR, h: total + fs + padB } };
 }
 
 /** Roller shutter box on top of the window: window shapes move down, the box is drawn above (top dimensions stay on top). */

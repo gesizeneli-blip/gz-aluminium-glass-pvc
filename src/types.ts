@@ -238,7 +238,22 @@ export interface ExtraPiece {
 }
 
 /** Roller shutter box above the window (roletë rrotulluese) */
+export type ShutterKind = 'alu' | 'plastic' | 'thermal' | 'persian';
+export const SHUTTER_KINDS: ShutterKind[] = ['alu', 'plastic', 'thermal', 'persian'];
+export const SHUTTER_KIND_LABELS: Record<ShutterKind, string> = {
+  alu: 'Grilë me litar alumini',
+  plastic: 'Grilë me litar plastike',
+  thermal: 'Grilë me litar termike',
+  persian: 'Persiane'
+};
+/** Quotation item made only of a shutter (no window frame / glass) */
+export const SHUTTER_ONLY_ID = 'shutter-only';
+
 export interface ShutterDef {
+  /** type of shutter; undefined = generic roller shutter (base rates) */
+  kind?: ShutterKind;
+  /** shutter-only item: no window is drawn */
+  only?: boolean;
   enabled: boolean;
   /** height of the shutter box in mm (sits above the window) */
   boxH: number;
@@ -255,6 +270,8 @@ export interface ShutterRates {
   minArea: number;
   netCostM2: number;
   netSellM2: number;
+  /** own prices per shutter type (override the base rates when set) */
+  kinds?: Partial<Record<ShutterKind, { costM2: number; sellM2: number; motorCost: number; motorSell: number }>>;
 }
 export const DEFAULT_SHUTTER_RATES: ShutterRates = { costM2: 0, sellM2: 0, motorCost: 0, motorSell: 0, minArea: 0, netCostM2: 0, netSellM2: 0 };
 

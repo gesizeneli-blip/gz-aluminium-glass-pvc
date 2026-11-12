@@ -5,7 +5,7 @@ import { Field, NumInput, Tabs, confirmDo } from '../components/ui';
 import { download, todayISO, uid } from '../lib/format';
 import { connect, disconnect, getSyncState, onSyncState, replaceCloudWithLocal, syncLinked, syncNow, type SyncState } from '../sync/engine';
 import * as syncApi from '../sync/client';
-import { DEFAULT_INFILL_RATES, DEFAULT_PANEL_RATES, DEFAULT_SHUTTER_RATES, DEFAULT_TRIM_RATES } from '../types';
+import { DEFAULT_INFILL_RATES, DEFAULT_PANEL_RATES, DEFAULT_SHUTTER_RATES, DEFAULT_TRIM_RATES, SHUTTER_KINDS, SHUTTER_KIND_LABELS, ShutterKind } from '../types';
 import { PANEL_SERIES } from '../data/panels';
 
 function CloudPanel() {
@@ -201,6 +201,33 @@ export default function Settings() {
                 <span />
                 <Field label={`Rrjeta: kosto për m² (${cat.currency.symbol})`}><NumInput value={r.netCostM2} min={0} onChange={(v) => up({ netCostM2: v })} /></Field>
                 <Field label={`Rrjeta: çmim shitjeje për m² (${cat.currency.symbol})`}><NumInput value={r.netSellM2} min={0} onChange={(v) => up({ netSellM2: v })} /></Field>
+              </div>
+            );
+          })()}
+          {(() => {
+            const r = { ...DEFAULT_SHUTTER_RATES, ...(cat.ctx.shutter ?? {}) };
+            const setKind = (k: ShutterKind, p: Partial<{ costM2: number; sellM2: number; motorCost: number; motorSell: number }>) => {
+              const cur = r.kinds?.[k] ?? { costM2: 0, sellM2: 0, motorCost: 0, motorSell: 0 };
+              setSetting('shutter', { ...r, kinds: { ...(r.kinds ?? {}), [k]: { ...cur, ...p } } });
+            };
+            return (
+              <div style={{ marginTop: 12 }}>
+                <b>Çmimet sipas llojit të grilës (ofertë vetëm për grila)</b>
+                {SHUTTER_KINDS.map((k) => {
+                  const kr = r.kinds?.[k] ?? { costM2: 0, sellM2: 0, motorCost: 0, motorSell: 0 };
+                  return (
+                    <div key={k} style={{ marginTop: 8 }}>
+                      <div className="small muted">{SHUTTER_KIND_LABELS[k]}</div>
+                      <div className="grid g2">
+                        <Field label={`Kosto për m² (${cat.currency.symbol})`}><NumInput value={kr.costM2} min={0} onChange={(v) => setKind(k, { costM2: v })} /></Field>
+                        <Field label={`Çmim shitjeje për m² (${cat.currency.symbol})`}><NumInput value={kr.sellM2} min={0} onChange={(v) => setKind(k, { sellM2: v })} /></Field>
+                        {k !== 'persian' && <Field label={`Motori: kosto (${cat.currency.symbol})`}><NumInput value={kr.motorCost} min={0} onChange={(v) => setKind(k, { motorCost: v })} /></Field>}
+                        {k !== 'persian' && <Field label={`Motori: çmim shitjeje (${cat.currency.symbol})`}><NumInput value={kr.motorSell} min={0} onChange={(v) => setKind(k, { motorSell: v })} /></Field>}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="hint">Nëse një lloj nuk është plotësuar fare, përdoret çmimi bazë i mësipërm. Plotësoji të gjitha llojet që shet.</div>
               </div>
             );
           })()}

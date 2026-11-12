@@ -11,7 +11,7 @@ import { Drawing2D } from '../components/Drawing2D';
 import { Window3D } from '../components/Window3D';
 import { CalcBreakdown, CostTable } from '../components/CalcBreakdown';
 import { Field, NumInput, Tabs, Warnings, confirmDo } from '../components/ui';
-import { OPEN_LABELS, DEFAULT_SHUTTER, DEFAULT_TRIM, OpenType, PRICE_METHOD_LABELS, PriceMethod, WindowItem, Layout, SHAPE_LABELS, ShapeType } from '../types';
+import { OPEN_LABELS, DEFAULT_SHUTTER, DEFAULT_TRIM, OpenType, PRICE_METHOD_LABELS, PriceMethod, WindowItem, Layout, SHAPE_LABELS, ShapeType, SHUTTER_KINDS, SHUTTER_KIND_LABELS, SHUTTER_ONLY_ID, ShutterKind } from '../types';
 import { isShaped, normalizeShape } from '../engine/shapes';
 import type { Catalog } from '../lib/data';
 
@@ -243,6 +243,17 @@ export default function WindowEditor() {
   const changeSystem = (id: string) => {
     const ns = cat.ctx.systems.get(id);
     const p: Partial<WindowItem> = { systemId: id, lineOff: {}, extraPieces: [] };
+    if (id === SHUTTER_ONLY_ID) {
+      p.shutter = { ...DEFAULT_SHUTTER, ...(w.shutter ?? {}), enabled: true, only: true, kind: w.shutter?.kind ?? 'alu', motor: w.shutter?.motor ?? false };
+      p.kind = SHUTTER_KIND_LABELS[p.shutter.kind ?? 'alu'];
+      p.pricing = { ...w.pricing, method: 'm2', unitPrice: 0 };
+      p.nets = {}; p.fills = {}; p.trims = undefined; p.panel = undefined; p.shape = undefined;
+      p.layout = JSON.parse(JSON.stringify(presetsFor('fixed')[0].layout));
+    } else if (w.shutter?.only) {
+      p.shutter = { ...w.shutter, only: false, enabled: false, kind: undefined };
+      p.kind = presetsFor(ns?.mode)[0]?.name ?? w.kind;
+      if (presetsFor(ns?.mode)[0]) p.layout = JSON.parse(JSON.stringify(presetsFor(ns?.mode)[0].layout));
+    }
     if (ns?.defaultGlassId && cat.ctx.glass.has(ns.defaultGlassId)) { p.glassId = ns.defaultGlassId; p.cellGlass = {}; }
     // the current layout may not exist for the new system type (e.g. sliding -> bifold): switch to its first model
     const okPresets = presetsFor(ns?.mode);
@@ -259,7 +270,8 @@ export default function WindowEditor() {
     patch(p);
   };
 
-  const netCells = isShaped(w.shape) ? [] : computeGeometry(w.width, w.height, w.layout, sys?.params ?? {}).cells;
+  const sOnly = sys?.id === SHUTTER_ONLY_ID;
+  const netCells = sOnly ? [] : isShaped(w.shape) ? [] : computeGeometry(w.width, w.height, w.layout, sys?.params ?? {}).cells;
   const multiOpts = sys?.mode ? MULTI_BY_MODE[sys.mode] ?? [] : [];
   const sashSuggest = sys?.params.maxSashW ? suggestSashCount(w.width, sys.params.maxSashW) : 0;
   const applyMulti = (kind: (typeof multiOpts)[number], n: number) =>
@@ -292,7 +304,7 @@ export default function WindowEditor() {
       <Tabs
         tabs={[
           { key: 'cfg', label: 'Konfigurimi + 2D' },
-          { key: '3d', label: '3D' },
+          ...(sOnly ? [] : [{ key: '3d', label: '3D' }]),
           { key: 'calc', label: 'Llogaritja teknike' },
           { key: 'price', label: 'Kostoja dhe çmimi' }
         ]}
@@ -323,7 +335,7 @@ export default function WindowEditor() {
                     ))}
                   </select>
                 </Field>
-                <Field label="Modeli i hapjes">
+                {!sOnly && (<Field label="Modeli i hapjes">
                   <select value="" onChange={(e) => e.target.value && applyPreset(e.target.value)}>
                     <option value="">{w.kind} (ndrysho…)</option>
                     <optgroup label="Standarde">
@@ -335,8 +347,8 @@ export default function WindowEditor() {
                       </optgroup>
                     )}
                   </select>
-                </Field>
-                {multiOpts.length > 0 && (
+                </Field>)}
+                {!sOnly && multiOpts.length > 0 && (
                   <Field label={`Numri i pjesëve${sashSuggest > 1 ? ` (sugjerim për ${w.width} mm: ${sashSuggest})` : ''}`}>
                     <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
                       {multiOpts.map((m) => (
@@ -356,7 +368,7 @@ export default function WindowEditor() {
                   </select>
                 </Field>
                 <Field label="Sasia (copë)"><NumInput value={w.qty} min={1} step={1} onChange={(v) => patch({ qty: Math.max(1, Math.floor(v)) })} /></Field>
-                <Field label="Forma e dritares">
+                {!sOnly && (<Field label="Forma e dritares">
                   <select
                     value={w.shape?.type ?? 'rect'}
                     onChange={(e) => {
@@ -371,7 +383,7 @@ export default function WindowEditor() {
                   >
                     {(Object.keys(SHAPE_LABELS) as ShapeType[]).map((k) => <option key={k} value={k}>{SHAPE_LABELS[k]}</option>)}
                   </select>
-                </Field>
+                </Field>)}
                 {w.shape?.type === 'arch' && (
                   <Field label="Lartësia e harkut (mm)" hint={`Maksimumi ${Math.round(Math.min(w.width / 2, w.height - 100))} mm (gjysmërreth)`}>
                     <NumInput value={w.shape.rise} min={50} onChange={(v) => patch({ shape: { ...w.shape!, rise: v } })} />
@@ -402,6 +414,7 @@ export default function WindowEditor() {
               )}
             </div>
             {sys?.panels && <PanelPicker value={w.panel} onChange={(p) => patch({ panel: p })} />}
+            {!sOnly && (
             <div className="card">
               <div className="row sp" style={{ marginBottom: 6 }}>
                 <b>Fashatura</b>
@@ -421,22 +434,36 @@ export default function WindowEditor() {
               )}
               <div className="hint">Llogaritet në metra linearë sipas anëve të zgjedhura. Çmimi për ml: Cilësime → Punë krahu.</div>
             </div>
+            )}
             <div className="card">
               <div className="row sp" style={{ marginBottom: 6 }}>
-                <b>Roletë rrotulluese dhe rrjeta</b>
-                <label className="chk"><input type="checkbox" checked={!!w.shutter?.enabled} onChange={(e) => patch({ shutter: { ...(w.shutter ?? DEFAULT_SHUTTER), enabled: e.target.checked } })} /> Me roletë rrotulluese</label>
+                <b>{sOnly ? 'Grila / persiane' : 'Roletë rrotulluese dhe rrjeta'}</b>
+                {!sOnly && <label className="chk"><input type="checkbox" checked={!!w.shutter?.enabled} onChange={(e) => patch({ shutter: { ...(w.shutter ?? DEFAULT_SHUTTER), enabled: e.target.checked } })} /> Me roletë rrotulluese</label>}
               </div>
               {w.shutter?.enabled && (
                 <div className="grid g2">
-                  <Field label="Lartësia e kutisë së roletës (mm)" hint="Kutia vendoset sipër dritares, jashtë përmasave të dritares">
-                    <NumInput value={w.shutter.boxH} min={100} max={600} onChange={(v) => patch({ shutter: { ...w.shutter!, boxH: v } })} />
+                  <Field label="Lloji">
+                    <select value={w.shutter.kind ?? ''} onChange={(e) => {
+                      const k = (e.target.value || undefined) as ShutterKind | undefined;
+                      patch({ shutter: { ...w.shutter!, kind: k, motor: k === 'persian' ? false : w.shutter!.motor }, ...(sOnly && k ? { kind: SHUTTER_KIND_LABELS[k] } : {}) });
+                    }}>
+                      {!sOnly && <option value="">Roletë rrotulluese (çmimi bazë)</option>}
+                      {SHUTTER_KINDS.filter((k) => sOnly || k !== 'persian').map((k) => <option key={k} value={k}>{SHUTTER_KIND_LABELS[k]}</option>)}
+                    </select>
                   </Field>
-                  <label className="chk" style={{ alignSelf: 'end' }}>
-                    <input type="checkbox" checked={w.shutter.motor} onChange={(e) => patch({ shutter: { ...w.shutter!, motor: e.target.checked } })} /> Me motor
-                  </label>
+                  {w.shutter.kind !== 'persian' && (
+                    <Field label="Lartësia e kutisë (mm)" hint={sOnly ? 'Kutia e grilës sipër; lartësia e dritares më lart është lartësia e grilës' : 'Kutia vendoset sipër dritares, jashtë përmasave të dritares'}>
+                      <NumInput value={w.shutter.boxH} min={100} max={600} onChange={(v) => patch({ shutter: { ...w.shutter!, boxH: v } })} />
+                    </Field>
+                  )}
+                  {w.shutter.kind !== 'persian' && (
+                    <label className="chk" style={{ alignSelf: 'end' }}>
+                      <input type="checkbox" checked={w.shutter.motor} onChange={(e) => patch({ shutter: { ...w.shutter!, motor: e.target.checked } })} /> Me motor
+                    </label>
+                  )}
                 </div>
               )}
-              {netCells.length > 0 && (
+              {!sOnly && netCells.length > 0 && (
                 <div style={{ marginTop: 8 }}>
                   <div className="small muted" style={{ marginBottom: 4 }}>Rrjetë kundër insekteve (zgjidh pjesët):</div>
                   <div className="pill-row">
@@ -462,7 +489,7 @@ export default function WindowEditor() {
               </div>
               <Field label="Shënime"><textarea value={w.notes} onChange={(e) => patch({ notes: e.target.value })} /></Field>
             </details>
-            <details className="card">
+            {!sOnly && (<details className="card">
               <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Ndarja e dritares (për konfigurime të veçanta){isShaped(w.shape) ? ' — nuk përdoret për forma të veçanta' : ''}</summary>
               <div className="row sp" style={{ marginTop: 10 }}>
                 <h2 style={{ margin: 0 }}>Ndarja e dritares</h2>
@@ -496,7 +523,7 @@ export default function WindowEditor() {
                   ))}
                 </div>
               )}
-            </details>
+            </details>)}
           </div>
           <div style={{ position: 'sticky', top: 8 }}>
             <div className="card">
@@ -506,7 +533,7 @@ export default function WindowEditor() {
               ) : (
                 <div className="empty">Zgjidh sistemin dhe përmasat.</div>
               )}
-              {sys && !sizeInvalid && (
+              {sys && !sizeInvalid && !sOnly && (
                 <div className="card" style={{ padding: 10, marginTop: 8 }}>
                   {selValid ? (
                     <div>

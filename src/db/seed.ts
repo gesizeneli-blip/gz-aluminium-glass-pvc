@@ -1,3 +1,4 @@
+import { SHUTTER_ONLY_ID } from '../types';
 import type { Accessory, AccLine, ColorDef, GlassType, LaborRate, Material, Profile, ProfileCategory, RecipeLine, System, SystemMode } from '../types';
 import { DEFAULT_CATEGORIES } from '../engine/calc';
 
@@ -10,7 +11,7 @@ import { DEFAULT_CATEGORIES } from '../engine/calc';
  * Everything can be edited, duplicated or deleted in the app.
  */
 
-export const SEED_VERSION = 4;
+export const SEED_VERSION = 5;
 const uid = (p: string, n: string) => `${p}-${n}`;
 
 /** What the owner gave us as real numbers: 3 cm bottom channel, 32 cm glass handles. Everything else is 0 / to be verified. */
@@ -43,7 +44,7 @@ const FR = (id: string, name: string, group: string, mode: SystemMode, material:
 const GL = (id: string, name: string, group: string, mode: SystemMode, glass: string, lines: SysSpec['glassLines'], note = ''): SysSpec =>
   ({ id, name, group, mode, material: 'glass', kind: 'glass', depth: CHANNEL_MM, frameW: 0, sashW: 0, mullionW: 0, defaultGlass: glass, glassLines: lines, note });
 
-export const GROUP_ORDER = ['Dyer të jashtme', 'Alumin i thjeshtë', 'Alumil', 'PVC', 'Palosje (bifold)', 'Pasqyra', 'Ndarje ambienti', 'Kabina dushi'];
+export const GROUP_ORDER = ['Dyer të jashtme', 'Alumin i thjeshtë', 'Alumil', 'PVC', 'Palosje (bifold)', 'Pasqyra', 'Ndarje ambienti', 'Kabina dushi', 'Grila / roletë (pa dritare)'];
 
 const SPECS: SysSpec[] = [
   { ...FR('door-ext-alu', 'Derë e jashtme alumini (me panel)', 'Dyer të jashtme', 'door', 'alu', 70, 60, 80, 80, 0, 'Paneli (modeli) zgjidhet te dritarja. Çmimi i panelit sipas serisë: Cilësime → Punë krahu.'), panels: true },
@@ -66,6 +67,7 @@ const SPECS: SysSpec[] = [
   GL('shower-slide', 'Kabinë dushi – Skorevel (rrëshqitëse)', 'Kabina dushi', 'slide', 'g-tempered8', ['track-top', 'track-bottom']),
   GL('shower-door', 'Kabinë dushi – me derë', 'Kabina dushi', 'door', 'g-tempered8', []),
   GL('shower-fold', 'Kabinë dushi – me palosje', 'Kabina dushi', 'fold', 'g-tempered8', ['track-top']),
+  GL(SHUTTER_ONLY_ID, 'Vetëm grilë / persiane (pa dritare)', 'Grila / roletë (pa dritare)', 'fixed', 'g-double', [], 'Ofertë vetëm për grila: zgjidh llojin (litar alumini / plastike / termike / persiane), motor po/jo. Çmimet: Cilësime → Punë krahu.'),
   GL('shower-fixed', 'Kabinë dushi – vetëm xham fiks', 'Kabina dushi', 'fixed', 'g-tempered8', [])
 ];
 
@@ -249,6 +251,8 @@ export function buildSystemsAndProfiles(): { systems: System[]; profiles: Profil
     });
     profiles.push(...profilesFor(spec));
   }
+  const so = systems.find((x) => x.id === SHUTTER_ONLY_ID);
+  if (so) { so.recipe = []; so.accRecipe = []; so.verified = true; so.notes = 'Sistem pa profile dhe pa xham: çmimi vjen nga grila/persianja (sipas m²) dhe motori.'; }
   return { systems, profiles };
 }
 

@@ -285,6 +285,33 @@ t('roller shutter + nets: drawing and pricing', () => {
   assert.equal(d2.shapes.length, d0.shapes.length);
 });
 
+t('shutter-only item: kinds, motor, persiane, drawing', () => {
+  const rates = { costM2: 1, sellM2: 2, motorCost: 3, motorSell: 4, minArea: 0, netCostM2: 0, netSellM2: 0,
+    kinds: { alu: { costM2: 10, sellM2: 20, motorCost: 100, motorSell: 150 }, persian: { costM2: 30, sellM2: 50, motorCost: 0, motorSell: 0 } } };
+  const c0 = () => ({ ...ctx(), shutter: rates });
+  const mk = (kind: any, motor: boolean) => win({ systemId: 'shutter-only', width: 1000, height: 1200, pricing: { method: 'm2', unitPrice: 0, manualTotal: 0, marginPct: 0 },
+    shutter: { enabled: true, only: true, kind, boxH: 250, motor } });
+  assert.ok(c0().systems.has('shutter-only'));
+  const a = calcWindow(mk('alu', true), c0());
+  assert.equal(a.errors.length, 0);
+  assert.equal(a.glass.length, 0);
+  assert.equal(a.pieces.length, 0);
+  assert.ok(Math.abs(a.price - (1.2 * 20 + 150)) < 1e-6, 'price = area*sell + motor');
+  assert.ok(Math.abs(a.costs.total - (1.2 * 10 + 100)) < 1e-6);
+  const a2 = calcWindow(mk('alu', false), c0());
+  assert.ok(Math.abs(a2.price - 24) < 1e-6);
+  const th = calcWindow(mk('thermal', false), c0());
+  assert.ok(Math.abs(th.price - 1.2 * 2) < 1e-6, 'unset kind falls back to base rates');
+  const pe = calcWindow(mk('persian', true), c0());
+  assert.ok(Math.abs(pe.price - 1.2 * 50) < 1e-6, 'persiane has no motor');
+  assert.ok(pe.addons!.every((x) => !x.label.startsWith('Motor')));
+  const sys = c0().systems.get('shutter-only')!;
+  const d = buildDrawing(1000, 1200, mk('alu', true).layout, sys.params, { dims: true, shutter: mk('alu', true).shutter });
+  assert.ok(d.shapes.length > 5 && drawingToSvg(d).includes('Grilë me litar alumini'));
+  const dp = buildDrawing(1000, 1200, mk('persian', false).layout, sys.params, { dims: true, shutter: mk('persian', false).shutter });
+  assert.ok(drawingToSvg(dp).includes('Persiane'));
+});
+
 t('shapes: arch semicircle, trapezoid, triangle, oval segments', () => {
   const arch = segments(1000, 1500, { type: 'arch', rise: 500 });
   assert.ok(Math.abs(arch[2].len - Math.PI * 500) < 0.5, 'semicircle arc = pi*r');

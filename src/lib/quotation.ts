@@ -1,5 +1,6 @@
 import type { Calc, ColorDef, Project, WindowItem } from '../types';
 import { calcWindow, CalcCtx } from '../engine/calc';
+import { SHUTTER_KIND_LABELS } from '../types';
 
 export const QUOTE_STATUSES = ['Draft', 'Lëshuar', 'Pranuar', 'Refuzuar'] as const;
 export type QuoteStatus = (typeof QUOTE_STATUSES)[number];
@@ -42,12 +43,16 @@ export interface QuotationRec {
 
 export function itemDescription(w: WindowItem, calc: Calc, sysName: string, colorName: string): string {
   const glasses = [...new Set(calc.glass.map((g) => g.composition || g.glassName))];
+  if (w.shutter?.only && w.shutter.enabled) {
+    const nm = w.shutter.kind ? SHUTTER_KIND_LABELS[w.shutter.kind] : 'Grilë';
+    return [nm + (w.shutter.motor && w.shutter.kind !== 'persian' ? ' me motor' : w.shutter.kind === 'persian' ? '' : ' pa motor'), `ngjyra ${colorName}`].join(', ');
+  }
   const parts = [`${w.kind || 'Dritare'}`, `sistemi ${sysName}`, `ngjyra ${colorName}`];
   if (glasses.length) parts.push(`qelq: ${glasses.join(' / ')}`);
   if (w.fills && Object.keys(w.fills).length) parts.push('me mbushje panel');
   if (w.trims && (w.trims.top || w.trims.bottom || w.trims.left || w.trims.right)) parts.push('me fashatura');
   if (w.panel) parts.push(`paneli ${w.panel.code}`);
-  if (w.shutter?.enabled) parts.push(`me roletë rrotulluese${w.shutter.motor ? ' me motor' : ''}`);
+  if (w.shutter?.enabled) parts.push(`me ${w.shutter.kind ? SHUTTER_KIND_LABELS[w.shutter.kind].toLowerCase() : 'roletë rrotulluese'}${w.shutter.motor ? ' me motor' : ''}`);
   if (w.nets && Object.values(w.nets).some(Boolean)) parts.push('me rrjetë');
   return parts.join(', ');
 }

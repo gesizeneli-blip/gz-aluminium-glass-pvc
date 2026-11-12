@@ -17,7 +17,7 @@ import type {
 import { evaluate } from './formula';
 import { computeGeometry, isSash, matchClass, GCell, Geometry } from './geometry';
 import type { AddonRow, InfillRates, PanelRates, ShutterRates, TrimRates } from '../types';
-import { DEFAULT_INFILL_RATES, DEFAULT_PANEL_RATES, DEFAULT_SHUTTER_RATES, DEFAULT_TRIM_RATES } from '../types';
+import { DEFAULT_INFILL_RATES, DEFAULT_PANEL_RATES, DEFAULT_SHUTTER_RATES, DEFAULT_TRIM_RATES, SHUTTER_KIND_LABELS, SHUTTER_ONLY_ID } from '../types';
 import { isShaped, segments, shapePerimeter, normalizeShape } from './shapes';
 
 export interface CalcCtx {
@@ -93,8 +93,10 @@ export function shutterAddons(w: WindowItem, ctx: CalcCtx, geom: Geometry): Addo
   const sh = w.shutter;
   if (sh?.enabled) {
     const area = Math.max(r.minArea, (w.width * w.height) / 1e6);
-    rows.push({ label: `Roletë rrotulluese (${Math.round(w.width)}×${Math.round(w.height)} mm)`, qty: Math.round(area * 1000) / 1000, unit: 'm²', cost: area * r.costM2, sell: area * r.sellM2 });
-    if (sh.motor) rows.push({ label: 'Motor për roletën', qty: 1, unit: 'copë', cost: r.motorCost, sell: r.motorSell });
+    const kr = (sh.kind && r.kinds?.[sh.kind]) || { costM2: r.costM2, sellM2: r.sellM2, motorCost: r.motorCost, motorSell: r.motorSell };
+    const name = sh.kind ? SHUTTER_KIND_LABELS[sh.kind] : 'Roletë rrotulluese';
+    rows.push({ label: `${name} (${Math.round(w.width)}×${Math.round(w.height)} mm)`, qty: Math.round(area * 1000) / 1000, unit: 'm²', cost: area * kr.costM2, sell: area * kr.sellM2 });
+    if (sh.motor && sh.kind !== 'persian') rows.push({ label: `Motor (${name.toLowerCase()})`, qty: 1, unit: 'copë', cost: kr.motorCost, sell: kr.motorSell });
   }
   if (w.panel) {
     const pr = { ...DEFAULT_PANEL_RATES, ...(ctx.panelRates ?? {}) }[w.panel.series] ?? { cost: 0, sell: 0 };
@@ -155,7 +157,9 @@ export function calcWindow(w: WindowItem, ctx: CalcCtx): Calc {
   };
 
   const shapedSeen = new Set<string>();
+  const sOnly = sys.id === SHUTTER_ONLY_ID;
   for (const line of sys.recipe) {
+    if (sOnly) break;
     if (!line.enabled || w.lineOff[line.id]) continue;
     const prof = ctx.profiles.get(line.profileId);
     if (!prof) {
@@ -277,7 +281,7 @@ export function calcWindow(w: WindowItem, ctx: CalcCtx): Calc {
   const glassRows: GlassRow[] = [];
   const infillRows: AddonRow[] = [];
   const infillRate: InfillRates = { ...DEFAULT_INFILL_RATES, ...(ctx.infill ?? {}) };
-  for (const cell of geom.cells) {
+  for (const cell of sOnly ? [] : geom.cells) {
     try {
       const { gw, gh } = glassSize(sys, cell, W, H);
       if (gw <= 0 || gh <= 0) {
