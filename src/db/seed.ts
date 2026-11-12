@@ -10,7 +10,7 @@ import { DEFAULT_CATEGORIES } from '../engine/calc';
  * Everything can be edited, duplicated or deleted in the app.
  */
 
-export const SEED_VERSION = 3;
+export const SEED_VERSION = 4;
 const uid = (p: string, n: string) => `${p}-${n}`;
 
 /** What the owner gave us as real numbers: 3 cm bottom channel, 32 cm glass handles. Everything else is 0 / to be verified. */
@@ -53,6 +53,7 @@ const SPECS: SysSpec[] = [
   FR('alumil-s77', 'Alumil S77 (me hapje)', 'Alumil', 'swing', 'alu', 77, 45, 55, 55, 1000),
   FR('alumil-s350', 'Alumil S350 – Skorevel (2 ose më shumë kanate të lëvizshme)', 'Alumil', 'slide', 'alu', 50, 45, 55, 55, 1200),
   FR('alumil-s560', 'Alumil S560 – Skorevel (fikse anësore + e lëvizshme, ose të dyja të lëvizshme)', 'Alumil', 'slide', 'alu', 60, 45, 55, 55, 1200),
+  FR('alumil-s700', 'Alumil S700 – Skorevel me kasë të sheshtë (pragu ~1.5–2 cm, të dyja kanatet të lëvizshme)', 'Alumil', 'slide', 'alu', 70, 45, 55, 55, 1500, 'Kasë e sheshtë poshtë (pragu vetëm ~15–20 mm), të dyja anët të lëvizshme. Përmasat e profileve janë të përafërta dhe duhen verifikuar me katalogun e Alumil.'),
   FR('kom76md', 'Kömmerling 76 MM MD', 'PVC', 'swing', 'pvc', 76, 60, 75, 80, 900, 'Figura me 2 ose më shumë kanate sipas përmasave.'),
   FR('kom76ad', 'Kömmerling 76 MM AD', 'PVC', 'swing', 'pvc', 76, 60, 75, 80, 900, 'Figura me 2 ose më shumë kanate sipas përmasave.'),
   FR('weiss72ad', 'Weiss 72 MM AD', 'PVC', 'swing', 'pvc', 72, 60, 75, 80, 900, 'Figura me 2 ose më shumë kanate sipas përmasave.'),

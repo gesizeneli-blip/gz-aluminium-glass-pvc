@@ -143,7 +143,7 @@ t('all presets compute on all systems', () => {
 });
 
 t('catalogue: required systems exist with groups and modes', () => {
-  const ids = ['alu-open', 'alu-slide', 'alumil-s67', 'alumil-s77', 'alumil-s350', 'alumil-s560', 'kom76md', 'kom76ad', 'weiss72ad', 'weiss60ad',
+  const ids = ['alu-open', 'alu-slide', 'alumil-s67', 'alumil-s77', 'alumil-s350', 'alumil-s560', 'alumil-s700', 'kom76md', 'kom76ad', 'weiss72ad', 'weiss60ad',
     'door-ext-alu', 'bifold-alu', 'bifold-glass', 'mirror', 'partition-glass', 'glass-door', 'shower-slide', 'shower-door', 'shower-fold', 'shower-fixed'];
   for (const id of ids) {
     const s = systems.find((x) => x.id === id);
