@@ -6,6 +6,7 @@ import { PANELS } from '../src/data/panels';
 import { computeGeometry, PRESETS, presetsFor, buildMulti, suggestSashCount, matchClass } from '../src/engine/geometry';
 import { buildSystemsAndProfiles, ACCESSORIES, GLASS_TYPES, LABOR_RATES } from '../src/db/seed';
 import type { WindowItem } from '../src/types';
+import { makeItems } from '../src/lib/quotation';
 import { insetPolygon, outline, segments, shapePerimeter } from '../src/engine/shapes';
 import { buildDrawing, drawingToSvg } from '../src/engine/drawing';
 
@@ -310,6 +311,22 @@ t('shutter-only item: kinds, motor, persiane, drawing', () => {
   assert.ok(d.shapes.length > 5 && drawingToSvg(d).includes('Grilë me litar alumini'));
   const dp = buildDrawing(1000, 1200, mk('persian', false).layout, sys.params, { dims: true, shutter: mk('persian', false).shutter });
   assert.ok(drawingToSvg(dp).includes('Persiane'));
+});
+
+t('shutter-only quotation: motor on its own line', () => {
+  const rates = { costM2: 0, sellM2: 0, motorCost: 0, motorSell: 0, minArea: 0, netCostM2: 0, netSellM2: 0,
+    kinds: { alu: { costM2: 10, sellM2: 20, motorCost: 100, motorSell: 150 } } };
+  const c0 = { ...ctx(), shutter: rates };
+  const w = win({ systemId: 'shutter-only', width: 1000, height: 1200, qty: 2, pricing: { method: 'm2', unitPrice: 0, manualTotal: 0, marginPct: 0 },
+    shutter: { enabled: true, only: true, kind: 'alu', boxH: 250, motor: true } });
+  const items = makeItems([w], c0 as any, []);
+  assert.equal(items.length, 2);
+  assert.equal(items[0].price, 48, 'grille: 1.2 m2 x 20 x 2');
+  assert.equal(items[1].price, 300, 'motor: 150 x 2');
+  assert.ok(items[1].motorLine && !items[0].motorLine);
+  assert.ok(Math.abs(items[0].calc.costs.total + items[1].calc.costs.total - calcWindow(w, c0 as any).costs.total) < 1e-6);
+  const noMotor = makeItems([{ ...w, shutter: { ...w.shutter!, motor: false } }], c0 as any, []);
+  assert.equal(noMotor.length, 1);
 });
 
 t('shapes: arch semicircle, trapezoid, triangle, oval segments', () => {

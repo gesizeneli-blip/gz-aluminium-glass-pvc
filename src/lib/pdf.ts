@@ -175,8 +175,8 @@ export function buildQuotationPdf(q: QuotationRec, opts: PdfOpts, showPricesOver
     const uniqueGlass = [...new Set(glassLines)].slice(0, 6);
     const textLines = 3 + descLines.length + (it.calc.glass.length ? uniqueGlass.length : 0);
     const asp = (w.width + 300) / (w.height + 300);
-    const drawH = Math.min(52, imgW / asp);
-    const rowH = Math.max(drawH + 6, textLines * 4.2 + 8, 30);
+    const drawH = it.motorLine ? 0 : Math.min(52, imgW / asp);
+    const rowH = it.motorLine ? Math.max(textLines * 4.2 + 4, 18) : Math.max(drawH + 6, textLines * 4.2 + 8, 30);
     if (y + rowH > PH - 22) {
       doc.addPage();
       header();
@@ -194,7 +194,7 @@ export function buildQuotationPdf(q: QuotationRec, opts: PdfOpts, showPricesOver
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     doc.text(String(idx + 1), M + 2, y + 6);
-    if (q.showDrawings) {
+    if (q.showDrawings && !it.motorLine) {
       const d = buildDrawing(w.width, w.height, w.layout, it.params, { dims: true, colorHex: it.colorHex, glassLabels: it.glassLabels, shape: w.shape, shutter: w.shutter, nets: w.nets, panel: w.panel });
       drawShapes(doc, d, M + 10, y + 3, imgW, rowH - 6);
     }
@@ -202,7 +202,7 @@ export function buildQuotationPdf(q: QuotationRec, opts: PdfOpts, showPricesOver
     const tx = M + 62;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9.5);
-    doc.text(`${w.name || 'Pozicion'}  -  ${w.width} × ${w.height} mm`, tx, ty);
+    doc.text(it.motorLine ? 'Motor' : `${w.name || 'Pozicion'}  -  ${w.width} × ${w.height} mm`, tx, ty);
     ty += 4.6;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
@@ -211,7 +211,7 @@ export function buildQuotationPdf(q: QuotationRec, opts: PdfOpts, showPricesOver
       doc.text(l, tx, ty);
       ty += 4.1;
     });
-    doc.text(`Sasia: ${w.qty} copë   |   Sipërfaqja: ${num(it.calc.area * w.qty, 2)} m²`, tx, ty);
+    doc.text(it.motorLine ? `Sasia: ${w.qty} copë` : `Sasia: ${w.qty} copë   |   Sipërfaqja: ${num(it.calc.area * w.qty, 2)} m²`, tx, ty);
     ty += 4.2;
     doc.setFontSize(7.5);
     doc.setTextColor(95, 104, 118);

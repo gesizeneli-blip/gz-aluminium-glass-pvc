@@ -1,7 +1,6 @@
 import type { Calc, ColorDef, Project, WindowItem } from '../types';
 import { calcWindow, CalcCtx } from '../engine/calc';
 import { SHUTTER_KIND_LABELS } from '../types';
-import { money } from './format';
 
 export const QUOTE_STATUSES = ['Draft', 'Lëshuar', 'Pranuar', 'Refuzuar'] as const;
 export type QuoteStatus = (typeof QUOTE_STATUSES)[number];
@@ -17,6 +16,8 @@ export interface QItem {
   glassLabels: Record<string, string>;
   calc: Calc;
   desc: string;
+  /** separate motor line of a shutter-only item (not counted as a unit / area) */
+  motorLine?: boolean;
   /** line total (editable while Draft). Initialised from calc.price */
   price: number;
 }
@@ -46,13 +47,8 @@ export function itemDescription(w: WindowItem, calc: Calc, sysName: string, colo
   const glasses = [...new Set(calc.glass.map((g) => g.composition || g.glassName))];
   if (w.shutter?.only && w.shutter.enabled) {
     const nm = w.shutter.kind ? SHUTTER_KIND_LABELS[w.shutter.kind] : 'Grilë';
-    const q = Math.max(1, Math.floor(w.qty || 1));
     const motorRow = calc.addons?.find((a) => a.label.startsWith('Motor'));
-    const gridSell = (calc.addons ?? []).filter((a) => !a.label.startsWith('Motor')).reduce((t, a) => t + a.sell, 0) * q;
-    const head = [nm + (motorRow ? ' me motor' : w.shutter.kind === 'persian' ? '' : ' pa motor'), `ngjyra ${colorName}`].join(', ');
-    return motorRow
-      ? `${head}. Çmimi: ${money(Math.round(gridSell), 'lek')} + motori ${money(Math.round(motorRow.sell * q), 'lek')}`
-      : head;
+    return [nm + (motorRow ? ' me motor' : w.shutter.kind === 'persian' ? '' : ' pa motor'), `ngjyra ${colorName}`].join(', ');
   }
   const parts = [`${w.kind || 'Dritare'}`, `sistemi ${sysName}`, `ngjyra ${colorName}`];
   if (glasses.length) parts.push(`qelq: ${glasses.join(' / ')}`);
@@ -65,7 +61,7 @@ export function itemDescription(w: WindowItem, calc: Calc, sysName: string, colo
 }
 
 export function makeItems(windows: WindowItem[], ctx: CalcCtx, colors: ColorDef[]): QItem[] {
-  return windows.map((w) => {
+  return windows.flatMap((w): QItem[] => {
     const calc = calcWindow(w, ctx);
     const sys = ctx.systems.get(w.systemId);
     const col = colors.find((c) => c.name === w.color);
@@ -73,7 +69,8 @@ export function makeItems(windows: WindowItem[], ctx: CalcCtx, colors: ColorDef[
     for (const g of calc.glass) glassLabels[g.cell] = `${g.w}×${g.h}`;
     const { id: _id, ...rest } = w;
     void _id;
-    return {
+    const motorRow = w.shutter?.only && w.pricing.method !== 'manual' ? calc.addons?.find((a) => a.label.startsWith('Motor')) : undefined;
+    const item: QItem = {
       win: JSON.parse(JSON.stringify(rest)) as WindowItem,
       sysId: w.systemId,
       sysName: sys?.name ?? '?',
@@ -86,6 +83,30 @@ export function makeItems(windows: WindowItem[], ctx: CalcCtx, colors: ColorDef[
       desc: itemDescription(w, calc, sys?.name ?? '?', w.color),
       price: Math.round(calc.price)
     };
+    if (!motorRow) return [item];
+    // motor goes on its own quotation line
+    const q = calc.qty;
+    const mSell = motorRow.sell * q;
+    const mCost = motorRow.cost * q;
+    const gridCalc: Calc = {
+      ...calc,
+      addons: calc.addons!.filter((a) => a !== motorRow),
+      costs: { ...calc.costs, other: calc.costs.other - mCost, total: calc.costs.total - mCost },
+      price: calc.price - mSell,
+      profit: calc.price - mSell - (calc.costs.total - mCost)
+    };
+    const motorCalc: Calc = {
+      ...calc,
+      area: 0, perimeter: 0, addons: [motorRow],
+      costs: { ...calc.costs, profiles: 0, reinforcement: 0, glass: 0, accessories: 0, gaskets: 0, labor: 0, material: 0, other: mCost, total: mCost },
+      price: mSell, profit: mSell - mCost, materialSell: 0, extrasPrice: mSell, profitPerM2: 0, profitPerUnit: (mSell - mCost) / q
+    };
+    const motorWin = JSON.parse(JSON.stringify(item.win)) as WindowItem;
+    motorWin.name = 'Motor';
+    return [
+      { ...item, calc: gridCalc, price: Math.round(calc.price - mSell) },
+      { ...item, win: motorWin, calc: motorCalc, motorLine: true, glassLabels: {}, desc: `Motor për ${item.desc.split(',')[0].toLowerCase()}`, price: Math.round(mSell) }
+    ];
   });
 }
 
@@ -139,7 +160,7 @@ export function quoteTotals(q: QuotationRec) {
   const grand = net + vat;
   const cost = q.items.reduce((s, i) => s + i.calc.costs.total, 0);
   const material = q.items.reduce((s, i) => s + i.calc.costs.material, 0);
-  const units = q.items.reduce((s, i) => s + i.win.qty, 0);
+  const units = q.items.reduce((s, i) => s + (i.motorLine ? 0 : i.win.qty), 0);
   const area = q.items.reduce((s, i) => s + i.calc.area * i.win.qty, 0);
   return { subtotal, discount, net, vat, grand, cost, material, units, area, profit: net - cost };
 }
