@@ -63,20 +63,28 @@ export function computeGeometry(
   const cols = layout.columns.length ? layout.columns : [{ cells: [{ open: 'fixed' as OpenType }] }];
   const innerW = W - 2 * fw;
   const innerH = H - 2 * fw;
+  const tr = layout.transom && layout.transom.h > 0 ? layout.transom : undefined;
+  const trH = tr ? Math.min(tr.h, Math.max(0, innerH - mw - MIN_SIZE)) : 0;
+  const colTop = tr ? fw + trH + mw : fw;
+  const colH = tr ? innerH - trH - mw : innerH;
   const availW = innerW - (cols.length - 1) * mw;
   const dw = distribute(availW, cols.map((c) => c.w));
   if (dw.warn) warnings.push('Gjerësitë e kolonave nuk përputhen me përmasën; u rregulluan proporcionalisht.');
   const cells: GCell[] = [];
   const mullV: GMullion[] = [];
   const mullH: GMullion[] = [];
+  if (tr) {
+    cells.push({ key: 'T', col: 0, row: 1, x: fw, y: fw, cw: innerW, ch: trH, open: tr.open });
+    mullH.push({ x: fw, y: fw + trH, len: innerW });
+  }
   let x = fw;
   cols.forEach((col, ci) => {
     const cw = dw.sizes[ci];
     const rows = col.cells.length ? col.cells : [{ open: 'fixed' as OpenType }];
-    const availH = innerH - (rows.length - 1) * mw;
+    const availH = colH - (rows.length - 1) * mw;
     const dh = distribute(availH, rows.map((r) => r.h));
     if (dh.warn) warnings.push(`Lartësitë në kolonën ${ci + 1} nuk përputhen; u rregulluan proporcionalisht.`);
-    let y = fw;
+    let y = colTop;
     rows.forEach((r, ri) => {
       const ch = dh.sizes[ri];
       cells.push({ key: `${ci + 1}-${ri + 1}`, col: ci + 1, row: ri + 1, x, y, cw, ch, open: r.open });
@@ -88,7 +96,7 @@ export function computeGeometry(
     });
     x += cw;
     if (ci < cols.length - 1) {
-      mullV.push({ x, y: fw, len: innerH });
+      mullV.push({ x, y: colTop, len: colH });
       x += mw;
     }
   });
@@ -273,6 +281,7 @@ PRESETS.push(
 
 /* ---------- Exterior door presets (panel doors) ---------- */
 PRESETS.push(
+  { key: 'transom-2col', name: 'Fikse sipër (e plotë) + dy pjesë poshtë', layout: { transom: { h: 300, open: 'fixed' as OpenType }, columns: [{ w: 470, cells: [{ open: 'fixed' as OpenType }] }, { cells: [{ open: 'fixed' as OpenType }] }] } },
   { key: 'ext-door', modes: ['door'], name: 'Derë e jashtme – një krah', layout: { columns: [{ cells: [{ open: 'door-right' as OpenType }] }] } },
   { key: 'ext-door-side-r', modes: ['door'], name: 'Derë + anësor fiks djathtas', layout: { columns: [{ cells: [{ open: 'door-right' as OpenType }] }, { w: 400, cells: [{ open: 'fixed' as OpenType }] }] } },
   { key: 'ext-door-side-l', modes: ['door'], name: 'Anësor fiks majtas + derë', layout: { columns: [{ w: 400, cells: [{ open: 'fixed' as OpenType }] }, { cells: [{ open: 'door-left' as OpenType }] }] } },

@@ -66,6 +66,8 @@ export interface Column {
 }
 export interface Layout {
   columns: Column[];
+  /** full-width top section (transom) above all columns; height in mm */
+  transom?: { h: number; open: OpenType };
 }
 
 export type Scope = 'window' | 'cell' | 'sash' | 'fixed' | 'mullionV' | 'mullionH';

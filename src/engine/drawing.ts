@@ -233,7 +233,7 @@ function buildWindowDrawing(W: number, H: number, layout: Layout, params: Record
     dimLine(-fs * 0.4, H, xl - fs * 0.6, H);
     shapes.push({ k: 'text', x: xl - fs * 0.5, y: H / 2, s: `${Math.round(H)}`, size: fs, anchor: 'middle', rot: -90, bold: true });
     // aperture widths of columns (top) when more than one column
-    const firstRowCells = g.cells.filter((c) => c.row === 1);
+    const firstRowCells = g.cells.filter((c) => c.row === 1 && c.key !== 'T');
     if (firstRowCells.length > 1) {
       const yt = -fs * 1.6;
       for (const c of firstRowCells) {

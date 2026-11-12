@@ -44,8 +44,49 @@ function LayoutEditor({
     fn(c);
     onChange(c);
   };
+  const tKey = 'T';
   return (
     <div>
+      <div className="card" style={{ padding: 10 }}>
+        <label className="chk">
+          <input
+            type="checkbox"
+            checked={!!layout.transom}
+            onChange={(e) => set((l) => { l.transom = e.target.checked ? { h: 300, open: 'fixed' } : undefined; })}
+          /> Pjesë e sipërme e plotë (tranzom) mbi të gjitha kolonat
+        </label>
+        {layout.transom && (
+          <div className="row" style={{ marginTop: 8, alignItems: 'flex-end' }}>
+            <div style={{ width: 130 }}>
+              <Field label="Lartësia mm">
+                <NumInput value={layout.transom.h} min={50} onChange={(v) => set((l) => { l.transom!.h = v; })} />
+              </Field>
+            </div>
+            <div className="grow" style={{ minWidth: 190 }}>
+              <Field label="Hapja">
+                <select value={layout.transom.open} onChange={(e) => set((l) => { l.transom!.open = e.target.value as OpenType; })}>
+                  {OPEN_KEYS.map((k) => <option key={k} value={k}>{OPEN_LABELS[k]}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div style={{ minWidth: 150 }}>
+              <Field label="Qelqi i kësaj pjese">
+                <select
+                  value={cellGlass[tKey] ?? ''}
+                  onChange={(e) => {
+                    const n = { ...cellGlass };
+                    if (e.target.value) n[tKey] = e.target.value; else delete n[tKey];
+                    onCellGlass(n);
+                  }}
+                >
+                  <option value="">Si dritarja ({glassOpts.find((g) => g.id === defaultGlass)?.name ?? '-'})</option>
+                  {glassOpts.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                </select>
+              </Field>
+            </div>
+          </div>
+        )}
+      </div>
       {layout.columns.map((col, ci) => (
         <div key={ci} className="card" style={{ padding: 10 }}>
           <div className="row sp">

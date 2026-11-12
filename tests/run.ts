@@ -182,6 +182,26 @@ t('presets by mode and multi-sash builders', () => {
   assert.ok(Math.abs(m.accessories.find((a) => a.accessoryId === 'polish')!.qty - 2.8) < 1e-9);
 });
 
+t('transom: full-width top section above columns', () => {
+  const sys = systems.find((x) => x.id === 'alu-open')!;
+  const layout = presetsFor('swing').find((p) => p.key === 'transom-2col')!.layout;
+  const g = computeGeometry(1345, 2450, layout, sys.params);
+  const T = g.cells.find((c) => c.key === 'T')!;
+  assert.equal(T.cw, g.innerW); assert.equal(T.ch, 300);
+  const bottoms = g.cells.filter((c) => c.key !== 'T');
+  assert.equal(bottoms.length, 2);
+  const mw = sys.params.mullionW;
+  assert.ok(bottoms.every((c) => Math.abs(c.y - (sys.params.frameW + 300 + mw)) < 1e-9));
+  assert.ok(Math.abs(bottoms[0].ch - (g.innerH - 300 - mw)) < 1e-9);
+  assert.equal(g.mullV.length, 1); assert.equal(g.mullH.length, 1);
+  assert.ok(Math.abs(g.mullV[0].y - bottoms[0].y) < 1e-9 && Math.abs(g.mullV[0].len - bottoms[0].ch) < 1e-9, 'vertical mullion starts under the transom');
+  const area = g.cells.reduce((a, c) => a + c.cw * c.ch, 0);
+  const c = calcWindow(win({ systemId: 'alu-open', layout, width: 1345, height: 2450 }), ctx());
+  assert.deepEqual(c.errors, []);
+  assert.equal(c.glass.length, 3);
+  assert.ok(area > 0);
+});
+
 t('exterior door with catalogue panel', () => {
   const sys = systems.find((x) => x.id === 'door-ext-alu')!;
   assert.ok(sys && sys.panels && sys.mode === 'door');
