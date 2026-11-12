@@ -1,3 +1,4 @@
+import { getPanelData } from './panelImages';
 import { jsPDF } from 'jspdf';
 import { buildDrawing, Drawing } from '../engine/drawing';
 import { quoteTotals, QuotationRec } from './quotation';
@@ -25,6 +26,9 @@ function drawShapes(doc: jsPDF, d: Drawing, x: number, y: number, w: number, h: 
         doc.setLineWidth(Math.max(0.08, (s.sw ?? 1) * scale));
       }
       doc.rect(X(s.x), Y(s.y), s.w * scale, s.h * scale, hasFill && hasStroke ? 'FD' : hasFill ? 'F' : 'S');
+    } else if (s.k === 'image') {
+      const data = getPanelData(s.file);
+      if (data) { try { doc.addImage(data, 'JPEG', X(s.x), Y(s.y), s.w * scale, s.h * scale); } catch { /* picture is optional */ } }
     } else if (s.k === 'poly') {
       const hasFill = !!s.fill && s.fill !== 'none';
       if (hasFill) doc.setFillColor(...hexToRgb(s.fill!));
@@ -191,7 +195,7 @@ export function buildQuotationPdf(q: QuotationRec, opts: PdfOpts, showPricesOver
     doc.setFontSize(9);
     doc.text(String(idx + 1), M + 2, y + 6);
     if (q.showDrawings) {
-      const d = buildDrawing(w.width, w.height, w.layout, it.params, { dims: true, colorHex: it.colorHex, glassLabels: it.glassLabels, shape: w.shape, shutter: w.shutter, nets: w.nets });
+      const d = buildDrawing(w.width, w.height, w.layout, it.params, { dims: true, colorHex: it.colorHex, glassLabels: it.glassLabels, shape: w.shape, shutter: w.shutter, nets: w.nets, panel: w.panel });
       drawShapes(doc, d, M + 10, y + 3, imgW, rowH - 6);
     }
     let ty = y + 6;

@@ -270,3 +270,12 @@ PRESETS.push(
   { key: 'glass-door', modes: ['door'], name: 'Derë xhami (menteshë sipër + poshtë)', layout: { columns: [{ cells: [{ open: 'door-left' as OpenType }] }] } },
   { key: 'glass-door-fixed', modes: ['door'], name: 'Derë xhami + fiks anësor', layout: glassWithDoor(1) }
 );
+
+/* ---------- Exterior door presets (panel doors) ---------- */
+PRESETS.push(
+  { key: 'ext-door', modes: ['door'], name: 'Derë e jashtme – një krah', layout: { columns: [{ cells: [{ open: 'door-right' as OpenType }] }] } },
+  { key: 'ext-door-side-r', modes: ['door'], name: 'Derë + anësor fiks djathtas', layout: { columns: [{ cells: [{ open: 'door-right' as OpenType }] }, { w: 400, cells: [{ open: 'fixed' as OpenType }] }] } },
+  { key: 'ext-door-side-l', modes: ['door'], name: 'Anësor fiks majtas + derë', layout: { columns: [{ w: 400, cells: [{ open: 'fixed' as OpenType }] }, { cells: [{ open: 'door-left' as OpenType }] }] } },
+  { key: 'ext-door-double', modes: ['door'], name: 'Derë me dy krahë', layout: { columns: [{ cells: [{ open: 'door-left' as OpenType }] }, { cells: [{ open: 'door-right' as OpenType }] }] } },
+  { key: 'ext-door-top', modes: ['door'], name: 'Derë me xham fiks sipër', layout: { columns: [{ cells: [{ open: 'fixed' as OpenType, h: 400 }, { open: 'door-right' as OpenType }] }] } }
+);

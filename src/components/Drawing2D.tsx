@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { buildDrawing, drawingToSvg } from '../engine/drawing';
-import type { Layout, ShapeDef, ShutterDef } from '../types';
+import type { Layout, PanelChoice, ShapeDef, ShutterDef } from '../types';
 
 export function Drawing2D({
-  W, H, layout, params, colorHex, glassLabels, showKeys, shape, shutter, nets
+  W, H, layout, params, colorHex, glassLabels, showKeys, shape, shutter, nets, panel
 }: {
   W: number;
   H: number;
@@ -15,10 +15,11 @@ export function Drawing2D({
   shape?: ShapeDef;
   shutter?: ShutterDef;
   nets?: Record<string, boolean>;
+  panel?: PanelChoice;
 }) {
   const svg = useMemo(() => {
     if (!(W > 0 && H > 0)) return '';
-    return drawingToSvg(buildDrawing(W, H, layout, params, { dims: true, colorHex, glassLabels, showKeys, shape, shutter, nets }));
-  }, [W, H, layout, params, colorHex, glassLabels, showKeys, shape, shutter, nets]);
+    return drawingToSvg(buildDrawing(W, H, layout, params, { dims: true, colorHex, glassLabels, showKeys, shape, shutter, nets, panel }));
+  }, [W, H, layout, params, colorHex, glassLabels, showKeys, shape, shutter, nets, panel]);
   return <div className="drawing" dangerouslySetInnerHTML={{ __html: svg }} />;
 }

@@ -5,7 +5,8 @@ import { Field, NumInput, Tabs, confirmDo } from '../components/ui';
 import { download, todayISO, uid } from '../lib/format';
 import { connect, disconnect, getSyncState, onSyncState, replaceCloudWithLocal, syncLinked, syncNow, type SyncState } from '../sync/engine';
 import * as syncApi from '../sync/client';
-import { DEFAULT_SHUTTER_RATES } from '../types';
+import { DEFAULT_PANEL_RATES, DEFAULT_SHUTTER_RATES } from '../types';
+import { PANEL_SERIES } from '../data/panels';
 
 function CloudPanel() {
   const [st, setSt] = useState<SyncState>(getSyncState());
@@ -204,6 +205,30 @@ export default function Settings() {
             );
           })()}
           <div className="hint">Roleta llogaritet sipas gjerësisë × lartësisë së dritares; rrjeta sipas hapjes së pjesëve të zgjedhura. Çmimet fillojnë me 0: plotësoji ti.</div>
+        </div>
+      )}
+
+      {tab === 'rates' && (
+        <div className="card">
+          <h2>Panelet e dyerve të jashtme (çmim për krah)</h2>
+          {(() => {
+            const r = { ...DEFAULT_PANEL_RATES, ...(cat.ctx.panelRates ?? {}) };
+            const keys = Object.keys(PANEL_SERIES) as (keyof typeof r)[];
+            return (
+              <div className="grid g2">
+                {keys.map((k) => (
+                  <div key={k} className="card" style={{ padding: 10 }}>
+                    <b>{PANEL_SERIES[k]}</b>
+                    <div className="grid g2">
+                      <Field label={`Kosto (${cat.currency.symbol})`}><NumInput value={r[k].cost} min={0} onChange={(v) => setSetting('panelRates', { ...r, [k]: { ...r[k], cost: v } })} /></Field>
+                      <Field label={`Shitje (${cat.currency.symbol})`}><NumInput value={r[k].sell} min={0} onChange={(v) => setSetting('panelRates', { ...r, [k]: { ...r[k], sell: v } })} /></Field>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+          <div className="hint">Çmimi i panelit shtohet te çmimi i derës sipas serisë së modelit të zgjedhur. Fillon me 0: plotësoje ti.</div>
         </div>
       )}
 

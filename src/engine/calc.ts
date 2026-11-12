@@ -16,8 +16,8 @@ import type {
 } from '../types';
 import { evaluate } from './formula';
 import { computeGeometry, isSash, matchClass, GCell, Geometry } from './geometry';
-import type { AddonRow, ShutterRates } from '../types';
-import { DEFAULT_SHUTTER_RATES } from '../types';
+import type { AddonRow, PanelRates, ShutterRates } from '../types';
+import { DEFAULT_PANEL_RATES, DEFAULT_SHUTTER_RATES } from '../types';
 import { isShaped, segments, shapePerimeter, normalizeShape } from './shapes';
 
 export interface CalcCtx {
@@ -28,6 +28,7 @@ export interface CalcCtx {
   labor: LaborRate[];
   categories: ProfileCategory[];
   shutter?: ShutterRates;
+  panelRates?: PanelRates;
 }
 
 export const DEFAULT_CATEGORIES: ProfileCategory[] = [
@@ -92,6 +93,10 @@ export function shutterAddons(w: WindowItem, ctx: CalcCtx, geom: Geometry): Addo
     const area = Math.max(r.minArea, (w.width * w.height) / 1e6);
     rows.push({ label: `Roletë rrotulluese (${Math.round(w.width)}×${Math.round(w.height)} mm)`, qty: Math.round(area * 1000) / 1000, unit: 'm²', cost: area * r.costM2, sell: area * r.sellM2 });
     if (sh.motor) rows.push({ label: 'Motor për roletën', qty: 1, unit: 'copë', cost: r.motorCost, sell: r.motorSell });
+  }
+  if (w.panel) {
+    const pr = { ...DEFAULT_PANEL_RATES, ...(ctx.panelRates ?? {}) }[w.panel.series] ?? { cost: 0, sell: 0 };
+    rows.push({ label: `Paneli i derës ${w.panel.code}`, qty: 1, unit: 'copë', cost: pr.cost, sell: pr.sell });
   }
   const netCells = geom.cells.filter((c) => w.nets?.[c.key]);
   if (netCells.length) {

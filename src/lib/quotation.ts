@@ -44,6 +44,7 @@ export function itemDescription(w: WindowItem, calc: Calc, sysName: string, colo
   const glasses = [...new Set(calc.glass.map((g) => g.composition || g.glassName))];
   const parts = [`${w.kind || 'Dritare'}`, `sistemi ${sysName}`, `ngjyra ${colorName}`];
   if (glasses.length) parts.push(`qelq: ${glasses.join(' / ')}`);
+  if (w.panel) parts.push(`paneli ${w.panel.code}`);
   if (w.shutter?.enabled) parts.push(`me roletë rrotulluese${w.shutter.motor ? ' me motor' : ''}`);
   if (w.nets && Object.values(w.nets).some(Boolean)) parts.push('me rrjetë');
   return parts.join(', ');

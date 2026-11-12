@@ -2,12 +2,13 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { computeGeometry, isSash } from '../engine/geometry';
-import type { Layout, ShapeDef, ShutterDef } from '../types';
+import type { Layout, PanelChoice, ShapeDef, ShutterDef } from '../types';
+import { panelUrl } from '../data/panels';
 import { insetPolygon, isShaped, outline } from '../engine/shapes';
 
 /** Real 3D model generated from actual dimensions, frame/sash depth and glass thickness. */
 export function Window3D({
-  W, H, layout, params, colorHex, glassThickness, shape, shutter, nets, lowered = 0.3
+  W, H, layout, params, colorHex, glassThickness, shape, shutter, nets, lowered = 0.3, panel
 }: {
   W: number;
   H: number;
@@ -20,6 +21,7 @@ export function Window3D({
   nets?: Record<string, boolean>;
   /** how far the roller shutter curtain is pulled down, 0..1 */
   lowered?: number;
+  panel?: PanelChoice;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -140,6 +142,21 @@ export function Window3D({
       extraMats.push(netMat);
       for (const c of g.cells) if (nets[c.key]) add(c.x, c.y, c.cw, c.ch, 2, -fd / 2 - 4, netMat);
     }
+    const panelTex: THREE.Texture[] = [];
+    if (panel && !isShaped(shape)) {
+      const leaf = panel.combo ? { x: 0, y: 0, cw: W, ch: H } : g.cells.find((c) => c.open.startsWith('door'));
+      if (leaf) {
+        const tex = new THREE.TextureLoader().load(panelUrl(panel.file));
+        tex.colorSpace = THREE.SRGBColorSpace;
+        panelTex.push(tex);
+        const pm = new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.05 });
+        extraMats.push(pm);
+        const geo = new THREE.PlaneGeometry(leaf.cw * s, leaf.ch * s);
+        const mesh = new THREE.Mesh(geo, pm);
+        mesh.position.set((leaf.x + leaf.cw / 2 - W / 2) * s, (H / 2 - (leaf.y + leaf.ch / 2)) * s, (sd / 2 + 1.5) * s);
+        group.add(mesh);
+      }
+    }
     scene.add(group);
 
     const size = Math.max(W, H) * s;
@@ -172,11 +189,12 @@ export function Window3D({
         const m = o as THREE.Mesh;
         if (m.geometry) m.geometry.dispose();
       });
+      panelTex.forEach((t) => t.dispose());
       [frameMat, sashMat, glassMat, handleMat, edge, ...extraMats].forEach((m) => m.dispose());
       renderer.dispose();
       if (renderer.domElement.parentNode === el) el.removeChild(renderer.domElement);
     };
-  }, [W, H, layout, params, colorHex, glassThickness, shape, shutter, nets, lowered]);
+  }, [W, H, layout, params, colorHex, glassThickness, shape, shutter, nets, lowered, panel]);
 
   return <div ref={ref} className="three" />;
 }

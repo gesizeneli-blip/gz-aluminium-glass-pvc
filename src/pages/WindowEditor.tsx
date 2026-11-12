@@ -6,6 +6,7 @@ import { useCatalog } from '../lib/data';
 import { calcWindow } from '../engine/calc';
 import { computeGeometry, PRESETS, presetsFor, buildMulti, suggestSashCount, MULTI_BY_MODE, MAX_SASHES } from '../engine/geometry';
 import { GROUP_ORDER } from '../db/seed';
+import { PanelPicker } from '../components/PanelPicker';
 import { Drawing2D } from '../components/Drawing2D';
 import { Window3D } from '../components/Window3D';
 import { CalcBreakdown, CostTable } from '../components/CalcBreakdown';
@@ -350,6 +351,7 @@ export default function WindowEditor() {
                 </div>
               )}
             </div>
+            {sys?.panels && <PanelPicker value={w.panel} onChange={(p) => patch({ panel: p })} />}
             <div className="card">
               <div className="row sp" style={{ marginBottom: 6 }}>
                 <b>Roletë rrotulluese dhe rrjeta</b>
@@ -431,7 +433,7 @@ export default function WindowEditor() {
             <div className="card">
               <h2>Vizatimi teknik 2D</h2>
               {sys && !sizeInvalid ? (
-                <Drawing2D W={w.width} H={w.height} layout={w.layout} params={sys.params} colorHex={colorHex} glassLabels={glassLabels} showKeys shape={w.shape} shutter={w.shutter} nets={w.nets} />
+                <Drawing2D W={w.width} H={w.height} layout={w.layout} params={sys.params} colorHex={colorHex} glassLabels={glassLabels} showKeys shape={w.shape} shutter={w.shutter} nets={w.nets} panel={w.panel} />
               ) : (
                 <div className="empty">Zgjidh sistemin dhe përmasat.</div>
               )}
@@ -445,7 +447,7 @@ export default function WindowEditor() {
 
       {tab === '3d' && sys && !sizeInvalid && (
         <div className="card">
-          <Window3D W={w.width} H={w.height} layout={w.layout} params={sys.params} colorHex={colorHex} glassThickness={glass?.thickness ?? 24} shape={w.shape} shutter={w.shutter} nets={w.nets} lowered={lowered} />
+          <Window3D W={w.width} H={w.height} layout={w.layout} params={sys.params} colorHex={colorHex} glassThickness={glass?.thickness ?? 24} shape={w.shape} shutter={w.shutter} nets={w.nets} lowered={lowered} panel={w.panel} />
           {w.shutter?.enabled && (
             <Field label={`Roleta e ulur: ${Math.round(lowered * 100)}%`}>
               <input type="range" min={0} max={1} step={0.05} value={lowered} onChange={(e) => setLowered(Number(e.target.value))} />

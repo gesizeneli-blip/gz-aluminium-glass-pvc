@@ -6,6 +6,7 @@ import { useCatalog } from '../lib/data';
 import { Field, Modal, NumInput, Stat, confirmDo } from '../components/ui';
 import { QUOTE_STATUSES, QuotationRec, makeItems, nextNumber, quoteTotals, snapshotQuotation } from '../lib/quotation';
 import { buildQuotationPdf } from '../lib/pdf';
+import { preloadPanelImages } from '../lib/panelImages';
 import { fmtDate, money, num } from '../lib/format';
 
 export function QuotationsPage() {
@@ -108,6 +109,11 @@ export function QuotationEditor() {
   }, []);
 
   useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); }, [pdfUrl]);
+
+  // door panel pictures must be loaded before the (synchronous) PDF is built
+  useEffect(() => {
+    if (q) preloadPanelImages(q.items.map((it) => it.win.panel?.file ?? '').filter(Boolean));
+  }, [q?.items.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tot = useMemo(() => (q ? quoteTotals(q) : null), [q]);
   if (!q || !tot) return <div className="empty">Duke ngarkuar…</div>;

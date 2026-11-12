@@ -10,7 +10,7 @@ import { DEFAULT_CATEGORIES } from '../engine/calc';
  * Everything can be edited, duplicated or deleted in the app.
  */
 
-export const SEED_VERSION = 2;
+export const SEED_VERSION = 3;
 const uid = (p: string, n: string) => `${p}-${n}`;
 
 /** What the owner gave us as real numbers: 3 cm bottom channel, 32 cm glass handles. Everything else is 0 / to be verified. */
@@ -35,6 +35,7 @@ interface SysSpec {
   glassLines?: ('channel' | 'track-top' | 'track-bottom')[];
   topBottomTracks?: boolean;
   note?: string;
+  panels?: boolean;
 }
 
 const FR = (id: string, name: string, group: string, mode: SystemMode, material: 'pvc' | 'alu', depth: number, frameW: number, sashW: number, mullionW: number, maxSashW: number, note = ''): SysSpec =>
@@ -42,9 +43,10 @@ const FR = (id: string, name: string, group: string, mode: SystemMode, material:
 const GL = (id: string, name: string, group: string, mode: SystemMode, glass: string, lines: SysSpec['glassLines'], note = ''): SysSpec =>
   ({ id, name, group, mode, material: 'glass', kind: 'glass', depth: CHANNEL_MM, frameW: 0, sashW: 0, mullionW: 0, defaultGlass: glass, glassLines: lines, note });
 
-export const GROUP_ORDER = ['Alumin i thjeshtë', 'Alumil', 'PVC', 'Palosje (bifold)', 'Pasqyra', 'Ndarje ambienti', 'Kabina dushi'];
+export const GROUP_ORDER = ['Dyer të jashtme', 'Alumin i thjeshtë', 'Alumil', 'PVC', 'Palosje (bifold)', 'Pasqyra', 'Ndarje ambienti', 'Kabina dushi'];
 
 const SPECS: SysSpec[] = [
+  { ...FR('door-ext-alu', 'Derë e jashtme alumini (me panel)', 'Dyer të jashtme', 'door', 'alu', 70, 60, 80, 80, 0, 'Paneli (modeli) zgjidhet te dritarja. Çmimi i panelit sipas serisë: Cilësime → Punë krahu.'), panels: true },
   FR('alu-open', 'Alumin i thjeshtë – me hapje', 'Alumin i thjeshtë', 'swing', 'alu', 50, 40, 45, 45, 1000, 'Xham dopio ose tek xham (zgjidhet te dritarja).'),
   FR('alu-slide', 'Alumin i thjeshtë – me shinë', 'Alumin i thjeshtë', 'slide', 'alu', 50, 40, 45, 45, 1200, 'Xham dopio ose tek xham (zgjidhet te dritarja).'),
   FR('alumil-s67', 'Alumil S67 (me hapje)', 'Alumil', 'swing', 'alu', 67, 45, 55, 55, 1000),
@@ -237,7 +239,7 @@ export function buildSystemsAndProfiles(): { systems: System[]; profiles: Profil
     if (spec.maxSashW) params.maxSashW = spec.maxSashW;
     if (spec.kind === 'frame') { if (pvc) { params.weldAllow = 0; params.reinfDeduct = 0; } else params.cutAdj = 0; }
     systems.push({
-      id: spec.id, name: spec.name, material: spec.material, group: spec.group, mode: spec.mode,
+      id: spec.id, name: spec.name, material: spec.material, group: spec.group, mode: spec.mode, panels: spec.panels,
       defaultGlassId: spec.defaultGlass, params,
       glassFormulas: { ...GLASS_FORMULAS }, recipe: recipeFor(spec), accRecipe: accRecipeFor(spec),
       verified: false,

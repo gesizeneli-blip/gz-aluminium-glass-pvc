@@ -29,7 +29,10 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,ico,woff,woff2}'],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
-        navigateFallback: 'index.html'
+        navigateFallback: 'index.html',
+        runtimeCaching: [
+          { urlPattern: /\/panels\/.*\.webp$/, handler: 'CacheFirst', options: { cacheName: 'door-panels', expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 365 } } }
+        ]
       }
     })
   ],

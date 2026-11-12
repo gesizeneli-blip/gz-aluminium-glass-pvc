@@ -108,6 +108,8 @@ export interface System {
   mode?: SystemMode;
   /** glass pre-selected when this system is chosen */
   defaultGlassId?: string;
+  /** exterior door systems: a decorative panel design can be chosen */
+  panels?: boolean;
   params: Record<string, number>;
   glassFormulas: GlassFormulas;
   recipe: RecipeLine[];
@@ -254,6 +256,14 @@ export interface ShutterRates {
 }
 export const DEFAULT_SHUTTER_RATES: ShutterRates = { costM2: 0, sellM2: 0, motorCost: 0, motorSell: 0, minArea: 0, netCostM2: 0, netSellM2: 0 };
 
+/** Selected door panel design (from the Altech catalogue) */
+export interface PanelChoice { code: string; file: string; series: 'aluminium' | 'traditional' | 'inox'; combo: boolean }
+/** Price of a panel design per series, per door leaf (owner fills in) */
+export type PanelRates = Record<'aluminium' | 'traditional' | 'inox', { cost: number; sell: number }>;
+export const DEFAULT_PANEL_RATES: PanelRates = {
+  aluminium: { cost: 0, sell: 0 }, traditional: { cost: 0, sell: 0 }, inox: { cost: 0, sell: 0 }
+};
+
 export interface AddonRow {
   label: string;
   qty: number;
@@ -280,6 +290,8 @@ export interface WindowItem {
   shutter?: ShutterDef;
   /** insect screens (rrjeta) per cell key, e.g. { '1-1': true } */
   nets?: Record<string, boolean>;
+  /** decorative panel of an exterior door */
+  panel?: PanelChoice;
   pricing: Pricing;
   laborIds: string[];
   extras: ExtraCost[];

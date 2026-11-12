@@ -1,4 +1,5 @@
-import type { Layout, OpenType, ShapeDef, ShutterDef } from '../types';
+import type { Layout, OpenType, PanelChoice, ShapeDef, ShutterDef } from '../types';
+import { panelUrl } from '../data/panels';
 import { computeGeometry, isSash } from './geometry';
 import { insetPolygon, isShaped, normalizeShape, outline, segments } from './shapes';
 
@@ -6,6 +7,7 @@ export type Shape =
   | { k: 'rect'; x: number; y: number; w: number; h: number; fill?: string; stroke?: string; sw?: number }
   | { k: 'poly'; pts: [number, number][]; fill?: string; stroke?: string; sw?: number }
   | { k: 'line'; x1: number; y1: number; x2: number; y2: number; stroke?: string; sw?: number; dash?: number[] }
+  | { k: 'image'; x: number; y: number; w: number; h: number; href: string; file: string }
   | { k: 'text'; x: number; y: number; s: string; size: number; anchor?: 'start' | 'middle' | 'end'; rot?: number; fill?: string; bold?: boolean };
 
 export interface Drawing {
@@ -21,6 +23,7 @@ export interface DrawOpts {
   shape?: ShapeDef;
   shutter?: ShutterDef;
   nets?: Record<string, boolean>;
+  panel?: PanelChoice;
 }
 
 const INK = '#1b2433';
@@ -143,6 +146,16 @@ function addShutterBox(d: Drawing, W: number, H: number, sh: ShutterDef, opts: D
   return { shapes: [...moved, ...out], vb: { x: vb.x - extra, y: vb.y, w: vb.w + extra, h: vb.h + bh } };
 }
 
+/** Door panel picture over the door leaf (or over the whole opening when the picture already shows door + side panel). */
+function addPanel(shapes: Shape[], cells: { x: number; y: number; cw: number; ch: number; open: OpenType }[], W: number, H: number, panel?: PanelChoice) {
+  if (!panel) return;
+  const href = panelUrl(panel.file);
+  if (panel.combo) { shapes.push({ k: 'image', x: 0, y: 0, w: W, h: H, href, file: panel.file }); return; }
+  const leaf = cells.find((c) => c.open.startsWith('door'));
+  if (!leaf) return;
+  shapes.push({ k: 'image', x: leaf.x, y: leaf.y, w: leaf.cw, h: leaf.ch, href, file: panel.file });
+}
+
 function addNets(shapes: Shape[], cells: { key: string; x: number; y: number; cw: number; ch: number }[], nets: Record<string, boolean> | undefined, u: number) {
   if (!nets) return;
   for (const c of cells) {
@@ -201,6 +214,7 @@ function buildWindowDrawing(W: number, H: number, layout: Layout, params: Record
   }
 
   addNets(shapes, g.cells, opts.nets, u);
+  addPanel(shapes, g.cells, W, H, opts.panel);
   const mg = opts.dims === false ? 0 : fs * 4.2;
   if (opts.dims !== false) {
     const dimLine = (x1: number, y1: number, x2: number, y2: number) => {
@@ -293,6 +307,7 @@ export function drawingToSvg(d: Drawing): string {
   const parts = d.shapes.map((s) => {
     if (s.k === 'rect')
       return `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${s.fill ?? 'none'}" stroke="${s.stroke ?? 'none'}" stroke-width="${s.sw ?? 1}"/>`;
+    if (s.k === 'image') return `<image href="${s.href}" x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" preserveAspectRatio="none"/>`;
     if (s.k === 'poly')
       return `<polygon points="${s.pts.map((p) => p.join(',')).join(' ')}" fill="${s.fill ?? 'none'}" stroke="${s.stroke ?? 'none'}" stroke-width="${s.sw ?? 1}" stroke-linejoin="round"/>`;
     if (s.k === 'line')

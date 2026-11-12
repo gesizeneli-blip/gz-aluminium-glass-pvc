@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { evaluate } from '../src/engine/formula';
 import { optimizeCuts } from '../src/engine/optimizer';
 import { calcWindow, CalcCtx, DEFAULT_CATEGORIES, sumCalcs } from '../src/engine/calc';
+import { PANELS } from '../src/data/panels';
 import { computeGeometry, PRESETS, presetsFor, buildMulti, suggestSashCount, matchClass } from '../src/engine/geometry';
 import { buildSystemsAndProfiles, ACCESSORIES, GLASS_TYPES, LABOR_RATES } from '../src/db/seed';
 import type { WindowItem } from '../src/types';
@@ -143,7 +144,7 @@ t('all presets compute on all systems', () => {
 
 t('catalogue: required systems exist with groups and modes', () => {
   const ids = ['alu-open', 'alu-slide', 'alumil-s67', 'alumil-s77', 'alumil-s350', 'alumil-s560', 'kom76md', 'kom76ad', 'weiss72ad', 'weiss60ad',
-    'bifold-alu', 'bifold-glass', 'mirror', 'partition-glass', 'glass-door', 'shower-slide', 'shower-door', 'shower-fold', 'shower-fixed'];
+    'door-ext-alu', 'bifold-alu', 'bifold-glass', 'mirror', 'partition-glass', 'glass-door', 'shower-slide', 'shower-door', 'shower-fold', 'shower-fixed'];
   for (const id of ids) {
     const s = systems.find((x) => x.id === id);
     assert.ok(s, id); assert.ok(s!.group && s!.mode, id + ' group/mode');
@@ -179,6 +180,35 @@ t('presets by mode and multi-sash builders', () => {
   assert.equal(gd.accessories.find((a) => a.accessoryId === 'glass-hinge')!.qty, 2);
   const m = calcWindow(win({ systemId: 'mirror', layout: buildMulti('panels', 1), width: 600, height: 800, glassId: 'g-mirror5' }), ctx());
   assert.ok(Math.abs(m.accessories.find((a) => a.accessoryId === 'polish')!.qty - 2.8) < 1e-9);
+});
+
+t('exterior door with catalogue panel', () => {
+  const sys = systems.find((x) => x.id === 'door-ext-alu')!;
+  assert.ok(sys && sys.panels && sys.mode === 'door');
+  assert.ok(presetsFor('door').some((p) => p.key === 'ext-door-side-r'));
+  assert.ok(PANELS.length > 200 && PANELS.every((p) => p.file.endsWith('.webp')));
+  assert.equal(new Set(PANELS.map((p) => p.file)).size, PANELS.length, 'unique files');
+  const pc = PANELS.find((p) => !p.combo)!;
+  const layout = presetsFor('door').find((p) => p.key === 'ext-door-side-r')!.layout;
+  const w0 = win({ systemId: 'door-ext-alu', layout, width: 1300, height: 2100 });
+  const w1 = { ...w0, panel: { code: pc.code, file: pc.file, series: pc.series, combo: pc.combo } };
+  const rates = { aluminium: { cost: 100, sell: 180 }, traditional: { cost: 0, sell: 0 }, inox: { cost: 0, sell: 0 } };
+  const c0 = calcWindow(w0, { ...ctx(), panelRates: rates });
+  const c1 = calcWindow(w1, { ...ctx(), panelRates: rates });
+  assert.deepEqual(c1.errors, []);
+  const row = c1.addons!.find((a) => a.label.startsWith('Paneli'))!;
+  assert.ok(row);
+  if (pc.series === 'aluminium') { assert.equal(row.sell, 180); assert.ok(c1.price > c0.price); }
+  const params = sys.params;
+  const d = buildDrawing(1300, 2100, layout, params, { dims: true, panel: w1.panel });
+  const img = d.shapes.find((x) => x.k === 'image') as any;
+  assert.ok(img && img.href === `panels/${pc.file}`);
+  assert.ok(img.w < 1300 && img.h < 2100, 'panel only covers the door leaf, not the side panel');
+  assert.ok(drawingToSvg(d).includes('<image'));
+  const combo = PANELS.find((p) => p.combo)!;
+  const dc = buildDrawing(1300, 2100, layout, params, { panel: { code: combo.code, file: combo.file, series: combo.series, combo: true } });
+  const ic = dc.shapes.find((x) => x.k === 'image') as any;
+  assert.equal(ic.w, 1300);
 });
 
 t('roller shutter + nets: drawing and pricing', () => {
