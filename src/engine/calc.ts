@@ -16,8 +16,8 @@ import type {
 } from '../types';
 import { evaluate } from './formula';
 import { computeGeometry, isSash, matchClass, GCell, Geometry } from './geometry';
-import type { AddonRow, PanelRates, ShutterRates } from '../types';
-import { DEFAULT_PANEL_RATES, DEFAULT_SHUTTER_RATES } from '../types';
+import type { AddonRow, InfillRates, PanelRates, ShutterRates, TrimRates } from '../types';
+import { DEFAULT_INFILL_RATES, DEFAULT_PANEL_RATES, DEFAULT_SHUTTER_RATES, DEFAULT_TRIM_RATES } from '../types';
 import { isShaped, segments, shapePerimeter, normalizeShape } from './shapes';
 
 export interface CalcCtx {
@@ -29,6 +29,8 @@ export interface CalcCtx {
   categories: ProfileCategory[];
   shutter?: ShutterRates;
   panelRates?: PanelRates;
+  infill?: InfillRates;
+  trim?: TrimRates;
 }
 
 export const DEFAULT_CATEGORIES: ProfileCategory[] = [
@@ -104,6 +106,17 @@ export function shutterAddons(w: WindowItem, ctx: CalcCtx, geom: Geometry): Addo
     rows.push({ label: `Rrjetë kundër insekteve (${netCells.length} pjesë)`, qty: Math.round(area * 1000) / 1000, unit: 'm²', cost: area * r.netCostM2, sell: area * r.netSellM2 });
   }
   return rows;
+}
+
+/** Trim strips (fashatura): metres along the selected sides. */
+export function trimAddons(w: WindowItem, ctx: CalcCtx): AddonRow[] {
+  const t = w.trims;
+  if (!t) return [];
+  const r: TrimRates = { ...DEFAULT_TRIM_RATES, ...(ctx.trim ?? {}) };
+  const mm = (t.top ? w.width : 0) + (t.bottom ? w.width : 0) + (t.left ? w.height : 0) + (t.right ? w.height : 0);
+  if (mm <= 0) return [];
+  const m = mm / 1000;
+  return [{ label: `Fashatura (${[t.top && 'sipër', t.bottom && 'poshtë', t.left && 'majtas', t.right && 'djathtas'].filter(Boolean).join(', ')})`, qty: Math.round(m * 1000) / 1000, unit: 'ml', cost: m * r.costM, sell: m * r.sellM }];
 }
 
 export function calcWindow(w: WindowItem, ctx: CalcCtx): Calc {
@@ -262,11 +275,19 @@ export function calcWindow(w: WindowItem, ctx: CalcCtx): Calc {
 
   /* glass */
   const glassRows: GlassRow[] = [];
+  const infillRows: AddonRow[] = [];
+  const infillRate: InfillRates = { ...DEFAULT_INFILL_RATES, ...(ctx.infill ?? {}) };
   for (const cell of geom.cells) {
     try {
       const { gw, gh } = glassSize(sys, cell, W, H);
       if (gw <= 0 || gh <= 0) {
         warnings.push(`Qelqi në pjesën ${cell.key} ka përmasa ≤ 0.`);
+        continue;
+      }
+      if (w.fills?.[cell.key]) {
+        // solid panel (mbushje) instead of glass
+        const a = (gw * gh) / 1e6;
+        infillRows.push({ label: `Mbushje / panel (pjesa ${cell.key}, ${Math.round(gw)}×${Math.round(gh)} mm)`, qty: Math.round(a * 1e4) / 1e4, unit: 'm²', cost: a * infillRate.costM2, sell: a * infillRate.sellM2 });
         continue;
       }
       const gid = w.cellGlass[cell.key] || w.glassId;
@@ -336,7 +357,7 @@ export function calcWindow(w: WindowItem, ctx: CalcCtx): Calc {
     if (!w.laborIds.includes(lr.id)) continue;
     c.labor += lr.rate * (lr.unit === 'm2' ? area : lr.unit === 'ml' ? perimeter : 1);
   }
-  const addons = shutterAddons(w, ctx, geom);
+  const addons = [...shutterAddons(w, ctx, geom), ...infillRows, ...trimAddons(w, ctx)];
   const addCost = addons.reduce((a, r) => a + r.cost, 0);
   const addSell = addons.reduce((a, r) => a + r.sell, 0);
   const extrasCostUnit = w.extras.reduce((s, e) => s + (e.cost || 0), 0) + addCost;

@@ -5,7 +5,7 @@ import { Field, NumInput, Tabs, confirmDo } from '../components/ui';
 import { download, todayISO, uid } from '../lib/format';
 import { connect, disconnect, getSyncState, onSyncState, replaceCloudWithLocal, syncLinked, syncNow, type SyncState } from '../sync/engine';
 import * as syncApi from '../sync/client';
-import { DEFAULT_PANEL_RATES, DEFAULT_SHUTTER_RATES } from '../types';
+import { DEFAULT_INFILL_RATES, DEFAULT_PANEL_RATES, DEFAULT_SHUTTER_RATES, DEFAULT_TRIM_RATES } from '../types';
 import { PANEL_SERIES } from '../data/panels';
 
 function CloudPanel() {
@@ -229,6 +229,25 @@ export default function Settings() {
             );
           })()}
           <div className="hint">Çmimi i panelit shtohet te çmimi i derës sipas serisë së modelit të zgjedhur. Fillon me 0: plotësoje ti.</div>
+        </div>
+      )}
+
+      {tab === 'rates' && (
+        <div className="card">
+          <h2>Mbushje / panel dhe fashatura (çmime)</h2>
+          {(() => {
+            const inf = { ...DEFAULT_INFILL_RATES, ...(cat.ctx.infill ?? {}) };
+            const tr = { ...DEFAULT_TRIM_RATES, ...(cat.ctx.trim ?? {}) };
+            return (
+              <div className="grid g2">
+                <Field label={`Mbushje / panel: kosto për m² (${cat.currency.symbol})`}><NumInput value={inf.costM2} min={0} onChange={(v) => setSetting('infill', { ...inf, costM2: v })} /></Field>
+                <Field label={`Mbushje / panel: shitje për m² (${cat.currency.symbol})`}><NumInput value={inf.sellM2} min={0} onChange={(v) => setSetting('infill', { ...inf, sellM2: v })} /></Field>
+                <Field label={`Fashatura: kosto për ml (${cat.currency.symbol})`}><NumInput value={tr.costM} min={0} onChange={(v) => setSetting('trim', { ...tr, costM: v })} /></Field>
+                <Field label={`Fashatura: shitje për ml (${cat.currency.symbol})`}><NumInput value={tr.sellM} min={0} onChange={(v) => setSetting('trim', { ...tr, sellM: v })} /></Field>
+              </div>
+            );
+          })()}
+          <div className="hint">Mbushja llogaritet me përmasat e qelqit të asaj pjese (në vend të qelqit). Fashaturat sipas gjatësisë së anëve të zgjedhura. Fillojnë me 0: plotësoji ti.</div>
         </div>
       )}
 

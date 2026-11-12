@@ -11,7 +11,7 @@ import { Drawing2D } from '../components/Drawing2D';
 import { Window3D } from '../components/Window3D';
 import { CalcBreakdown, CostTable } from '../components/CalcBreakdown';
 import { Field, NumInput, Tabs, Warnings, confirmDo } from '../components/ui';
-import { OPEN_LABELS, DEFAULT_SHUTTER, OpenType, PRICE_METHOD_LABELS, PriceMethod, WindowItem, Layout, SHAPE_LABELS, ShapeType } from '../types';
+import { OPEN_LABELS, DEFAULT_SHUTTER, DEFAULT_TRIM, OpenType, PRICE_METHOD_LABELS, PriceMethod, WindowItem, Layout, SHAPE_LABELS, ShapeType } from '../types';
 import { isShaped, normalizeShape } from '../engine/shapes';
 import type { Catalog } from '../lib/data';
 
@@ -163,6 +163,7 @@ export default function WindowEditor() {
   const [tab, setTab] = useState<'cfg' | '3d' | 'calc' | 'price'>('cfg');
   const [saved, setSaved] = useState(true);
   const [lowered, setLowered] = useState(0.3);
+  const [sel, setSel] = useState('');
   const templates = useLiveQuery(() => db.templates.toArray(), []) ?? [];
   const project = useLiveQuery(() => db.projects.get(projectId), [projectId]);
   const loaded = useRef(false);
@@ -221,6 +222,14 @@ export default function WindowEditor() {
   if (!cat.ready || !w || !calc) return <div className="empty">Duke ngarkuar…</div>;
   const colorHex = cat.colors.find((c) => c.name === w.color)?.hex ?? '#f4f4f2';
   const glass = cat.ctx.glass.get(w.glassId);
+  const fillsHex: Record<string, string> = {};
+  Object.entries(w.fills ?? {}).forEach(([k, f]) => { fillsHex[k] = (f.color && cat.colors.find((c) => c.name === f.color)?.hex) || colorHex; });
+  const selValid = sel && (sel === 'T' || sel === '1-1' || w.layout.columns.some((col, ci) => col.cells.some((_, ri) => `${ci + 1}-${ri + 1}` === sel)));
+  const setFill = (key: string, on: boolean, color?: string) => {
+    const f = { ...(w.fills ?? {}) };
+    if (on) f[key] = color ? { color } : {}; else delete f[key];
+    patch({ fills: f });
+  };
   const sym = cat.currency.symbol;
   const sizeInvalid = !(w.width >= 200 && w.height >= 200);
 
@@ -395,6 +404,25 @@ export default function WindowEditor() {
             {sys?.panels && <PanelPicker value={w.panel} onChange={(p) => patch({ panel: p })} />}
             <div className="card">
               <div className="row sp" style={{ marginBottom: 6 }}>
+                <b>Fashatura</b>
+                <label className="chk"><input type="checkbox" checked={!!w.trims} onChange={(e) => patch({ trims: e.target.checked ? { ...DEFAULT_TRIM } : undefined })} /> Me fashatura</label>
+              </div>
+              {w.trims && (
+                <div>
+                  <div className="pill-row" style={{ marginBottom: 6 }}>
+                    {(['top', 'left', 'right', 'bottom'] as const).map((k) => (
+                      <label key={k} className="chk">
+                        <input type="checkbox" checked={w.trims![k]} onChange={(e) => patch({ trims: { ...w.trims!, [k]: e.target.checked } })} /> {{ top: 'Sipër', left: 'Majtas', right: 'Djathtas', bottom: 'Poshtë' }[k]}
+                      </label>
+                    ))}
+                  </div>
+                  <Field label="Gjerësia e fashaturës (mm)"><NumInput value={w.trims.w} min={10} onChange={(v) => patch({ trims: { ...w.trims!, w: v } })} /></Field>
+                </div>
+              )}
+              <div className="hint">Llogaritet në metra linearë sipas anëve të zgjedhura. Çmimi për ml: Cilësime → Punë krahu.</div>
+            </div>
+            <div className="card">
+              <div className="row sp" style={{ marginBottom: 6 }}>
                 <b>Roletë rrotulluese dhe rrjeta</b>
                 <label className="chk"><input type="checkbox" checked={!!w.shutter?.enabled} onChange={(e) => patch({ shutter: { ...(w.shutter ?? DEFAULT_SHUTTER), enabled: e.target.checked } })} /> Me roletë rrotulluese</label>
               </div>
@@ -474,9 +502,49 @@ export default function WindowEditor() {
             <div className="card">
               <h2>Vizatimi teknik 2D</h2>
               {sys && !sizeInvalid ? (
-                <Drawing2D W={w.width} H={w.height} layout={w.layout} params={sys.params} colorHex={colorHex} glassLabels={glassLabels} showKeys shape={w.shape} shutter={w.shutter} nets={w.nets} panel={w.panel} />
+                <Drawing2D W={w.width} H={w.height} layout={w.layout} params={sys.params} colorHex={colorHex} glassLabels={glassLabels} showKeys shape={w.shape} shutter={w.shutter} nets={w.nets} panel={w.panel} fills={fillsHex} trims={w.trims} selected={selValid ? sel : undefined} onCell={setSel} />
               ) : (
                 <div className="empty">Zgjidh sistemin dhe përmasat.</div>
+              )}
+              {sys && !sizeInvalid && (
+                <div className="card" style={{ padding: 10, marginTop: 8 }}>
+                  {selValid ? (
+                    <div>
+                      <div className="row sp" style={{ marginBottom: 6 }}>
+                        <b>Pjesa e zgjedhur: {sel === 'T' ? 'sipër (tranzom)' : sel}</b>
+                        <button className="btn sm" onClick={() => setSel('')}>✕</button>
+                      </div>
+                      <div className="row" style={{ gap: 6, marginBottom: 8 }}>
+                        <button className={'btn sm' + (!w.fills?.[sel] ? ' primary' : '')} onClick={() => setFill(sel, false)}>Xham</button>
+                        <button className={'btn sm' + (w.fills?.[sel] ? ' primary' : '')} onClick={() => setFill(sel, true, w.fills?.[sel]?.color)}>Mbushje / panel</button>
+                      </div>
+                      {!w.fills?.[sel] ? (
+                        <Field label="Lloji i qelqit për këtë pjesë">
+                          <select
+                            value={w.cellGlass[sel] ?? ''}
+                            onChange={(e) => {
+                              const n = { ...w.cellGlass };
+                              if (e.target.value) n[sel] = e.target.value; else delete n[sel];
+                              patch({ cellGlass: n });
+                            }}
+                          >
+                            <option value="">Si dritarja ({glass?.name ?? '-'})</option>
+                            {cat.glassTypes.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                          </select>
+                        </Field>
+                      ) : (
+                        <Field label="Ngjyra e mbushjes" hint="Si korniza = e njëjta ngjyrë me dritaren. Çmimi për m² vendoset te Cilësimet → Punë krahu.">
+                          <select value={w.fills[sel].color ?? ''} onChange={(e) => setFill(sel, true, e.target.value || undefined)}>
+                            <option value="">Si korniza ({w.color || 'ngjyra e dritares'})</option>
+                            {cat.colors.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                          </select>
+                        </Field>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="small muted">Kliko mbi një pjesë të vizatimit për ta bërë xham ose mbushje/panel.</div>
+                  )}
+                </div>
               )}
               <div className="hint" style={{ marginTop: 6 }}>
                 Vizatimi gjenerohet nga përmasat dhe konfigurimi real. Dimensionet e brendshme tregojnë gjerësinë e hapjes; numrat në qelq janë përmasat e qelqit të llogaritura. Simbolet e kuqe tregojnë drejtimin e hapjes (kulmi i trekëndëshit = ana e menteshave).
@@ -488,7 +556,7 @@ export default function WindowEditor() {
 
       {tab === '3d' && sys && !sizeInvalid && (
         <div className="card">
-          <Window3D W={w.width} H={w.height} layout={w.layout} params={sys.params} colorHex={colorHex} glassThickness={glass?.thickness ?? 24} shape={w.shape} shutter={w.shutter} nets={w.nets} lowered={lowered} panel={w.panel} />
+          <Window3D W={w.width} H={w.height} layout={w.layout} params={sys.params} colorHex={colorHex} glassThickness={glass?.thickness ?? 24} shape={w.shape} shutter={w.shutter} nets={w.nets} lowered={lowered} panel={w.panel} fills={fillsHex} />
           {w.shutter?.enabled && (
             <Field label={`Roleta e ulur: ${Math.round(lowered * 100)}%`}>
               <input type="range" min={0} max={1} step={0.05} value={lowered} onChange={(e) => setLowered(Number(e.target.value))} />

@@ -1,10 +1,10 @@
-import type { Layout, OpenType, PanelChoice, ShapeDef, ShutterDef } from '../types';
+import type { Layout, OpenType, PanelChoice, ShapeDef, ShutterDef, TrimDef } from '../types';
 import { panelUrl } from '../data/panels';
 import { computeGeometry, isSash } from './geometry';
 import { insetPolygon, isShaped, normalizeShape, outline, segments } from './shapes';
 
 export type Shape =
-  | { k: 'rect'; x: number; y: number; w: number; h: number; fill?: string; stroke?: string; sw?: number }
+  | { k: 'rect'; x: number; y: number; w: number; h: number; fill?: string; stroke?: string; sw?: number; cell?: string }
   | { k: 'poly'; pts: [number, number][]; fill?: string; stroke?: string; sw?: number }
   | { k: 'line'; x1: number; y1: number; x2: number; y2: number; stroke?: string; sw?: number; dash?: number[] }
   | { k: 'image'; x: number; y: number; w: number; h: number; href: string; file: string }
@@ -24,8 +24,15 @@ export interface DrawOpts {
   shutter?: ShutterDef;
   nets?: Record<string, boolean>;
   panel?: PanelChoice;
+  /** cells filled with a solid panel: cell key -> colour */
+  fills?: Record<string, string>;
+  trims?: TrimDef;
+  /** editor only: invisible clickable areas on every cell + highlight of the selected one */
+  hit?: boolean;
+  selected?: string;
 }
 
+const GLASS_BLUE = '#cfe6f5';
 const INK = '#1b2433';
 
 function buildShapedDrawing(W: number, H: number, shape: ShapeDef, params: Record<string, number>, opts: DrawOpts): Drawing {
@@ -38,11 +45,16 @@ function buildShapedDrawing(W: number, H: number, shape: ShapeDef, params: Recor
   const inn = insetPolygon(out, fw);
   const P = (pts: { x: number; y: number }[]): [number, number][] => pts.map((p) => [p.x, p.y]);
   shapes.push({ k: 'poly', pts: P(out), fill: opts.colorHex || '#e9ecef', stroke: INK, sw: u * 1.6 });
-  shapes.push({ k: 'poly', pts: P(inn), fill: '#cfe6f5', stroke: INK, sw: u });
+  shapes.push({ k: 'poly', pts: P(inn), fill: opts.fills?.['1-1'] ?? GLASS_BLUE, stroke: INK, sw: u });
+  if (opts.hit) {
+    if (opts.selected === '1-1') shapes.push({ k: 'poly', pts: P(inn), fill: 'none', stroke: '#e11d48', sw: u * 3 });
+    shapes.push({ k: 'rect', x: 0, y: 0, w: W, h: H, cell: '1-1' });
+  }
+  addTrims(shapes, W, H, opts.trims, u);
   const lab = opts.glassLabels?.['1-1'];
   const cx = inn.reduce((a, p) => a + p.x, 0) / inn.length;
   const cy = inn.reduce((a, p) => a + p.y, 0) / inn.length;
-  if (lab) shapes.push({ k: 'text', x: cx, y: cy + fs * 0.3, s: lab, size: fs * 0.62, anchor: 'middle', fill: '#27425f' });
+  if (lab) shapes.push({ k: 'text', x: cx, y: cy + fs * 0.3, s: lab, size: fs * 0.62, anchor: 'middle', fill: isFill ? '#ffffff' : '#27425f' });
   const dl = (x1: number, y1: number, x2: number, y2: number) => shapes.push({ k: 'line', x1, y1, x2, y2, stroke: '#6b7280', sw: u * 0.7 });
   if (opts.dims !== false) {
     const yb = H + fs * 2.2;
@@ -156,6 +168,16 @@ function addPanel(shapes: Shape[], cells: { x: number; y: number; cw: number; ch
   shapes.push({ k: 'image', x: leaf.x, y: leaf.y, w: leaf.cw, h: leaf.ch, href, file: panel.file });
 }
 
+function addTrims(shapes: Shape[], W: number, H: number, t: TrimDef | undefined, u: number) {
+  if (!t) return;
+  const w = Math.max(10, t.w || 60);
+  const st = { fill: '#e3e6ea', stroke: INK, sw: u * 0.8 } as const;
+  if (t.top) shapes.push({ k: 'rect', x: t.left ? -w : 0, y: -w, w: W + (t.left ? w : 0) + (t.right ? w : 0), h: w, ...st });
+  if (t.bottom) shapes.push({ k: 'rect', x: t.left ? -w : 0, y: H, w: W + (t.left ? w : 0) + (t.right ? w : 0), h: w, ...st });
+  if (t.left) shapes.push({ k: 'rect', x: -w, y: 0, w, h: H, ...st });
+  if (t.right) shapes.push({ k: 'rect', x: W, y: 0, w, h: H, ...st });
+}
+
 function addNets(shapes: Shape[], cells: { key: string; x: number; y: number; cw: number; ch: number }[], nets: Record<string, boolean> | undefined, u: number) {
   if (!nets) return;
   for (const c of cells) {
@@ -177,7 +199,6 @@ function buildWindowDrawing(W: number, H: number, layout: Layout, params: Record
   const fs = big / 42; // font size
   const shapes: Shape[] = [];
   const frameFill = opts.colorHex || '#e9ecef';
-  const glassFill = '#cfe6f5';
 
   shapes.push({ k: 'rect', x: 0, y: 0, w: W, h: H, fill: frameFill, stroke: INK, sw: u * 1.6 });
   shapes.push({ k: 'rect', x: fw, y: fw, w: W - 2 * fw, h: H - 2 * fw, fill: '#fff', stroke: INK, sw: u });
@@ -187,6 +208,8 @@ function buildWindowDrawing(W: number, H: number, layout: Layout, params: Record
   for (const m of g.mullH) shapes.push({ k: 'rect', x: m.x, y: m.y, w: m.len, h: mw, fill: frameFill, stroke: INK, sw: u });
 
   for (const c of g.cells) {
+    const glassFill = opts.fills?.[c.key] ?? GLASS_BLUE;
+    const isFill = !!opts.fills?.[c.key];
     const sash = isSash(c.open);
     const slide = c.open.startsWith('slide');
     if (sash) {
@@ -202,11 +225,11 @@ function buildWindowDrawing(W: number, H: number, layout: Layout, params: Record
       shapes.push({ k: 'rect', x: c.x, y: c.y, w: c.cw, h: c.ch, fill: '#fff', stroke: INK, sw: u });
       shapes.push({ k: 'rect', x: c.x + b, y: c.y + b, w: c.cw - 2 * b, h: c.ch - 2 * b, fill: glassFill, stroke: INK, sw: u * 0.8 });
     }
-    const lab = opts.glassLabels?.[c.key];
+    const lab = isFill ? 'Mbushje' : opts.glassLabels?.[c.key];
     const cx = c.x + c.cw / 2;
     const cy = c.y + c.ch / 2;
     if (lab) {
-      shapes.push({ k: 'text', x: cx, y: cy + fs * 0.35, s: lab, size: fs * 0.62, anchor: 'middle', fill: '#27425f' });
+      shapes.push({ k: 'text', x: cx, y: cy + fs * 0.35, s: lab, size: fs * 0.62, anchor: 'middle', fill: isFill ? '#ffffff' : '#27425f' });
     }
     if (opts.showKeys) {
       shapes.push({ k: 'text', x: c.x + fs * 0.4, y: c.y + fs * 1.1, s: c.key, size: fs * 0.6, fill: '#a33' });
@@ -214,6 +237,13 @@ function buildWindowDrawing(W: number, H: number, layout: Layout, params: Record
   }
 
   addNets(shapes, g.cells, opts.nets, u);
+  addTrims(shapes, W, H, opts.trims, u);
+  if (opts.hit) {
+    for (const c of g.cells) {
+      if (opts.selected === c.key) shapes.push({ k: 'rect', x: c.x, y: c.y, w: c.cw, h: c.ch, fill: 'none', stroke: '#e11d48', sw: u * 3 });
+      shapes.push({ k: 'rect', x: c.x, y: c.y, w: c.cw, h: c.ch, cell: c.key });
+    }
+  }
   addPanel(shapes, g.cells, W, H, opts.panel);
   const mg = opts.dims === false ? 0 : fs * 4.2;
   if (opts.dims !== false) {
@@ -306,7 +336,9 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 export function drawingToSvg(d: Drawing): string {
   const parts = d.shapes.map((s) => {
     if (s.k === 'rect')
-      return `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${s.fill ?? 'none'}" stroke="${s.stroke ?? 'none'}" stroke-width="${s.sw ?? 1}"/>`;
+      return s.cell
+        ? `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="#000" fill-opacity="0" data-cell="${s.cell}" style="cursor:pointer"/>`
+        : `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${s.fill ?? 'none'}" stroke="${s.stroke ?? 'none'}" stroke-width="${s.sw ?? 1}"/>`;
     if (s.k === 'image') return `<image href="${s.href}" x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" preserveAspectRatio="none"/>`;
     if (s.k === 'poly')
       return `<polygon points="${s.pts.map((p) => p.join(',')).join(' ')}" fill="${s.fill ?? 'none'}" stroke="${s.stroke ?? 'none'}" stroke-width="${s.sw ?? 1}" stroke-linejoin="round"/>`;

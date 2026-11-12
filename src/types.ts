@@ -258,6 +258,16 @@ export interface ShutterRates {
 }
 export const DEFAULT_SHUTTER_RATES: ShutterRates = { costM2: 0, sellM2: 0, motorCost: 0, motorSell: 0, minArea: 0, netCostM2: 0, netSellM2: 0 };
 
+/** A cell filled with a solid panel (mbushje) instead of glass; colour = frame colour unless set */
+export interface CellFill { color?: string }
+/** Trim strips (fashatura) around the window on the chosen sides */
+export interface TrimDef { top: boolean; bottom: boolean; left: boolean; right: boolean; w: number }
+export const DEFAULT_TRIM: TrimDef = { top: true, bottom: false, left: true, right: true, w: 60 };
+export interface InfillRates { costM2: number; sellM2: number }
+export interface TrimRates { costM: number; sellM: number }
+export const DEFAULT_INFILL_RATES: InfillRates = { costM2: 0, sellM2: 0 };
+export const DEFAULT_TRIM_RATES: TrimRates = { costM: 0, sellM: 0 };
+
 /** Selected door panel design (from the Altech catalogue) */
 export interface PanelChoice { code: string; file: string; series: 'aluminium' | 'traditional' | 'inox'; combo: boolean }
 /** Price of a panel design per series, per door leaf (owner fills in) */
@@ -294,6 +304,10 @@ export interface WindowItem {
   nets?: Record<string, boolean>;
   /** decorative panel of an exterior door */
   panel?: PanelChoice;
+  /** cells filled with a solid panel instead of glass, by cell key */
+  fills?: Record<string, CellFill>;
+  /** trim strips (fashatura) */
+  trims?: TrimDef;
   pricing: Pricing;
   laborIds: string[];
   extras: ExtraCost[];

@@ -182,6 +182,33 @@ t('presets by mode and multi-sash builders', () => {
   assert.ok(Math.abs(m.accessories.find((a) => a.accessoryId === 'polish')!.qty - 2.8) < 1e-9);
 });
 
+t('cell fill (panel instead of glass) and fashatura', () => {
+  const rates = { infill: { costM2: 20, sellM2: 40 }, trim: { costM: 3, sellM: 5 } };
+  const layout = buildMulti('slide', 2);
+  const w0 = win({ systemId: 'alu-slide', layout, width: 2000, height: 1500 });
+  const c0 = calcWindow(w0, { ...ctx(), ...rates });
+  assert.equal(c0.glass.length, 2);
+  const w1 = { ...w0, fills: { '1-1': {} }, trims: { top: true, bottom: false, left: true, right: true, w: 60 } };
+  const c1 = calcWindow(w1, { ...ctx(), ...rates });
+  assert.deepEqual(c1.errors, []);
+  assert.equal(c1.glass.length, 1, 'filled cell has no glass');
+  const inf = c1.addons!.find((a) => a.label.startsWith('Mbushje'))!;
+  const g0 = c0.glass.find((g) => g.cell === '1-1')!;
+  assert.ok(Math.abs(inf.qty - (g0.w * g0.h) / 1e6) < 1e-3, 'same area as the glass it replaces');
+  assert.ok(Math.abs(inf.sell - inf.qty * 40) < 1e-2);
+  const tr = c1.addons!.find((a) => a.label.startsWith('Fashatura'))!;
+  assert.ok(Math.abs(tr.qty - (2000 + 1500 + 1500) / 1000) < 1e-9, 'top + left + right');
+  assert.ok(Math.abs(tr.sell - 25) < 1e-9);
+  // drawing: filled cell uses its colour, hit areas carry the cell key
+  const params = ctx().systems.get('alu-slide')!.params;
+  const d = buildDrawing(2000, 1500, layout, params, { fills: { '1-1': '#334455' }, hit: true, selected: '1-1', trims: w1.trims });
+  assert.ok(d.shapes.some((s) => s.k === 'rect' && s.fill === '#334455'));
+  const svg = drawingToSvg(d);
+  assert.ok(svg.includes('data-cell="1-1"') && svg.includes('data-cell="2-1"'));
+  const dn = buildDrawing(2000, 1500, layout, params, {});
+  assert.ok(!drawingToSvg(dn).includes('data-cell'), 'no hit areas outside the editor');
+});
+
 t('transom: full-width top section above columns', () => {
   const sys = systems.find((x) => x.id === 'alu-open')!;
   const layout = presetsFor('swing').find((p) => p.key === 'transom-2col')!.layout;

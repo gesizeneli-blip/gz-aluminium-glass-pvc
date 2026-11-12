@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo } from 'react';
 import { db } from '../db';
-import { DEFAULT_PANEL_RATES, DEFAULT_SHUTTER_RATES } from '../types';
+import { DEFAULT_INFILL_RATES, DEFAULT_PANEL_RATES, DEFAULT_SHUTTER_RATES, DEFAULT_TRIM_RATES } from '../types';
 import type { Accessory, ColorDef, GlassType, LaborRate, Profile, ProfileCategory, System } from '../types';
 import { CalcCtx, DEFAULT_CATEGORIES } from '../engine/calc';
 import { DEFAULT_SETTINGS } from '../db/seed';
@@ -52,6 +52,8 @@ export function useCatalog(): Catalog {
         labor: laborRates,
         categories,
         shutter: { ...DEFAULT_SHUTTER_RATES, ...(s.get('shutter') ?? {}) },
+        infill: { ...DEFAULT_INFILL_RATES, ...(s.get('infill') ?? {}) },
+        trim: { ...DEFAULT_TRIM_RATES, ...(s.get('trim') ?? {}) },
         panelRates: { ...DEFAULT_PANEL_RATES, ...(s.get('panelRates') ?? {}) }
       }
     };

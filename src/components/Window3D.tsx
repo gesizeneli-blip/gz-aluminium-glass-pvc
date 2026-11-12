@@ -8,7 +8,7 @@ import { insetPolygon, isShaped, outline } from '../engine/shapes';
 
 /** Real 3D model generated from actual dimensions, frame/sash depth and glass thickness. */
 export function Window3D({
-  W, H, layout, params, colorHex, glassThickness, shape, shutter, nets, lowered = 0.3, panel
+  W, H, layout, params, colorHex, glassThickness, shape, shutter, nets, lowered = 0.3, panel, fills
 }: {
   W: number;
   H: number;
@@ -22,6 +22,8 @@ export function Window3D({
   /** how far the roller shutter curtain is pulled down, 0..1 */
   lowered?: number;
   panel?: PanelChoice;
+  /** cells filled with a solid panel: cell key -> colour */
+  fills?: Record<string, string>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -63,6 +65,14 @@ export function Window3D({
     const edge = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 });
 
     // x,y measured from top-left; convert to centered coordinates (y up)
+    const fillMats = new Map<string, THREE.MeshStandardMaterial>();
+    const glassFor = (key: string): THREE.Material => {
+      const hex = fills?.[key];
+      if (!hex) return glassMat;
+      let m = fillMats.get(hex);
+      if (!m) { m = new THREE.MeshStandardMaterial({ color: new THREE.Color(hex), roughness: 0.5, metalness: 0.2 }); fillMats.set(hex, m); }
+      return m;
+    };
     const add = (x: number, y: number, w: number, h: number, d: number, zc: number, mat: THREE.Material) => {
       const geo = new THREE.BoxGeometry(w * s, h * s, d * s);
       const m = new THREE.Mesh(geo, mat);
@@ -108,14 +118,14 @@ export function Window3D({
         add(c.x, c.y + c.ch - s2, c.cw, s2, sdz, zc, sashMat);
         add(c.x, c.y + s2, s2, c.ch - 2 * s2, sdz, zc, sashMat);
         add(c.x + c.cw - s2, c.y + s2, s2, c.ch - 2 * s2, sdz, zc, sashMat);
-        add(c.x + s2 - 4, c.y + s2 - 4, c.cw - 2 * s2 + 8, c.ch - 2 * s2 + 8, gt, zc, glassMat);
+        add(c.x + s2 - 4, c.y + s2 - 4, c.cw - 2 * s2 + 8, c.ch - 2 * s2 + 8, gt, zc, glassFor(c.key));
         if (c.open !== 'tilt') {
           const left = c.open.endsWith('left');
           const hx = left ? c.x + c.cw - s2 / 2 - 8 : c.x + s2 / 2 - 8;
           add(hx, c.y + c.ch / 2 - 60, 16, 120, 18, zc + sdz / 2 + 14, handleMat);
         }
       } else {
-        add(c.x - 6, c.y - 6, c.cw + 12, c.ch + 12, gt, 0, glassMat);
+        add(c.x - 6, c.y - 6, c.cw + 12, c.ch + 12, gt, 0, glassFor(c.key));
       }
     }
     }
@@ -190,11 +200,12 @@ export function Window3D({
         if (m.geometry) m.geometry.dispose();
       });
       panelTex.forEach((t) => t.dispose());
+      fillMats.forEach((m) => m.dispose());
       [frameMat, sashMat, glassMat, handleMat, edge, ...extraMats].forEach((m) => m.dispose());
       renderer.dispose();
       if (renderer.domElement.parentNode === el) el.removeChild(renderer.domElement);
     };
-  }, [W, H, layout, params, colorHex, glassThickness, shape, shutter, nets, lowered, panel]);
+  }, [W, H, layout, params, colorHex, glassThickness, shape, shutter, nets, lowered, panel, fills]);
 
   return <div ref={ref} className="three" />;
 }
