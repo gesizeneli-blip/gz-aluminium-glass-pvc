@@ -54,7 +54,7 @@ function buildShapedDrawing(W: number, H: number, shape: ShapeDef, params: Recor
   const lab = opts.glassLabels?.['1-1'];
   const cx = inn.reduce((a, p) => a + p.x, 0) / inn.length;
   const cy = inn.reduce((a, p) => a + p.y, 0) / inn.length;
-  if (lab) shapes.push({ k: 'text', x: cx, y: cy + fs * 0.3, s: lab, size: fs * 0.62, anchor: 'middle', fill: isFill ? '#ffffff' : '#27425f' });
+  if (lab) shapes.push({ k: 'text', x: cx, y: cy + fs * 0.3, s: lab, size: fs * 0.62, anchor: 'middle', fill: opts.fills?.['1-1'] ? '#ffffff' : '#27425f' });
   const dl = (x1: number, y1: number, x2: number, y2: number) => shapes.push({ k: 'line', x1, y1, x2, y2, stroke: '#6b7280', sw: u * 0.7 });
   if (opts.dims !== false) {
     const yb = H + fs * 2.2;
